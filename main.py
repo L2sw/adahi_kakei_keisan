@@ -16,18 +16,18 @@ def get_data(collection):
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
 
 # --- ページ設定 ---
-st.set_page_config(page_title="2人だけの家計簿", page_icon="💰", layout="wide")
+st.set_page_config(page_title="2人だけの家計簿 HD", page_icon="💰", layout="wide")
 
 # --- ユーザー判別 ---
 params = st.query_params
 user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
-current_user = "夫" if user_code == "h" else "妻"
+current_user = "大地" if user_code == "h" else "日向子"
 
-page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "全データ管理"])
+page = st.sidebar.radio("メニュー", ["台帳入力", "リスト管理", "全データ削除"])
 
 # --- [機能1] リスト管理 ---
-if page == "リスト管理":
+if page == "品ものリスト管理":
     st.header("🛒 買い物リスト管理")
     with st.form("list_form"):
         place = st.text_input("場所")
@@ -55,10 +55,10 @@ elif page == "全データ管理":
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"husband": False, "wife": False}
     
-    st.write(f"夫の同意: {'✅' if status['husband'] else '❌'}")
-    st.write(f"妻の同意: {'✅' if status['wife'] else '❌'}")
+    st.write(f"大地の同意: {'✅' if status['husband'] else '❌'}")
+    st.write(f"日向子の同意: {'✅' if status['wife'] else '❌'}")
     
-    user_key = "husband" if current_user == "夫" else "wife"
+    user_key = "husband" if current_user == "大地" else "wife"
     if st.button(f"同意を切り替える (現在: {status[user_key]})"):
         status[user_key] = not status[user_key]
         consent_ref.set(status)
@@ -86,7 +86,7 @@ else:
         
         with st.form("input_form", clear_on_submit=True):
             amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d")
-            is_reimburse = st.checkbox("全額立て替え (相手に全額請求)")
+            is_reimburse = st.checkbox("全建替")
             if st.form_submit_button("送信する"):
                 if amount is not None:
                     db.collection("expenses").add({
@@ -112,14 +112,14 @@ else:
             split = user_df[~user_df["is_reimburse"]]["amount"].sum()
             return reim, split
 
-        h_r, h_s = get_totals("夫")
-        w_r, w_s = get_totals("妻")
+        h_r, h_s = get_totals("大地")
+        w_r, w_s = get_totals("日向子")
         
         balance = (h_r + h_s/2) - (w_r + w_s/2)
         
         st.subheader("📊 精算結果")
-        if balance > 0: st.warning(f"👉 妻から夫へ **{int(balance):,} 円** 支払ってください")
-        elif balance < 0: st.warning(f"👉 夫から妻へ **{int(abs(balance)):,} 円** 支払ってください")
+        if balance > 0: st.warning(f"👉 日向子から大地へ **{int(balance):,} 円** 支払ってください")
+        elif balance < 0: st.warning(f"👉 大地から日向子へ **{int(abs(balance)):,} 円** 支払ってください")
         else: st.success("貸し借りなし！")
         
         # --- 履歴表示 ---
@@ -130,7 +130,7 @@ else:
                 user_df = df[df["person"] == user].copy()
                 user_df["日時"] = user_df["timestamp"].dt.strftime("%m/%d %H:%M")
                 st.dataframe(user_df[["日時", "place", "item", "amount", "is_reimburse"]].rename(
-                    columns={"place":"場所", "item":"内容", "amount":"円", "is_reimburse":"請求"}), 
+                    columns={"place":"場所", "item":"内容", "amount":"円", "is_reimburse":"全建替"}), 
                     use_container_width=True, hide_index=True)
                 
                 if user == current_user:
@@ -142,5 +142,5 @@ else:
                             st.cache_data.clear()
                             st.rerun()
 
-        show_history(col1, "夫")
-        show_history(col2, "妻")
+        show_history(col1, "大地")
+        show_history(col2, "日向子")
