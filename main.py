@@ -9,7 +9,7 @@ key_dict = json.loads(st.secrets["textkey"])
 creds = service_account.Credentials.from_service_account_info(key_dict)
 db = firestore.Client(credentials=creds)
 
-# --- キャッシュ ---
+# --- パフォーマンス向上: キャッシュを使ってデータ読み込みを効率化 ---
 @st.cache_data(ttl=60)
 def get_data(collection):
     docs = db.collection(collection).stream()
@@ -22,36 +22,38 @@ st.set_page_config(page_title="2人だけの家計簿", page_icon="💰", layout
 params = st.query_params
 user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
+# hなら大地、それ以外なら日向子とする
 current_user = "大地" if user_code == "h" else "日向子"
 
 page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "全データ管理"])
 
-# --- [機能1] リスト管理 (確実な削除UI) ---
+# --- [機能1] リスト管理 ---
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
-    with st.form("list_form", clear_on_submit=True):
-        col1, col2, col3 = st.columns([2, 2, 1])
-        place = col1.text_input("場所")
-        item = col2.text_input("品目")
-        if col3.form_submit_button("登録"):
+    with st.form("list_form"):
+        place = st.text_input("場所")
+        item = st.text_input("品目")
+        if st.form_submit_button("登録する"):
             if place and item:
                 db.collection("categories").add({"place": place, "item": item})
                 st.cache_data.clear()
                 st.rerun()
     
     st.write("---")
+    st.subheader("登録済みのリスト")
     cats = get_data("categories")
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
+        # 表形式で表示
+        display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        # 各行に削除ボタンを配置（スマホでも押しやすい工夫）
-        for _, row in df_cats.iterrows():
-            col_a, col_b, col_c = st.columns([2, 2, 1])
-            col_a.write(row['place'])
-            col_b.write(row['item'])
-            # 削除ボタン（キーをIDに固定することで確実に指定行を削除）
-            if col_c.button("削除", key=f"del_{row['id']}"):
-                db.collection("categories").document(row['id']).delete()
+        # 削除用UI
+        with st.expander("🗑️ リストから削除する"):
+            options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
+            selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
+            if st.button("この項目を削除"):
+                db.collection("categories").document(options[selected_cat]).delete()
                 st.cache_data.clear()
                 st.rerun()
     else:
@@ -59,7 +61,7 @@ if page == "リスト管理":
 
 # --- [機能2] 全データ管理 ---
 elif page == "全データ管理":
-    st.header("⚠️ 全データ削除の管理")
+    st.header("⚠️ 全データ削除")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     
@@ -81,7 +83,9 @@ elif page == "全データ管理":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
-    st.markdown("<h3 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h3>", unsafe_allow_html=True)
+    # 修正前
+# st.title("💰 2人だけの家計簿")
+    st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
     
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
@@ -129,6 +133,7 @@ else:
         elif balance < 0: st.warning(f"👉 **大地から日向子へ {int(abs(balance)):,} 円 支払ってください**")
         else: st.success("貸し借りなし！")
         
+        # --- 履歴表示 ---
         col1, col2 = st.columns(2)
         def show_history(col, user):
             with col:
