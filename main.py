@@ -9,7 +9,7 @@ key_dict = json.loads(st.secrets["textkey"])
 creds = service_account.Credentials.from_service_account_info(key_dict)
 db = firestore.Client(credentials=creds)
 
-# --- パフォーマンス向上: キャッシュを使ってデータ読み込みを効率化 ---
+# --- パフォーマンス向上 ---
 @st.cache_data(ttl=60)
 def get_data(collection):
     docs = db.collection(collection).stream()
@@ -29,7 +29,6 @@ page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "
 # --- [機能1] リスト管理 ---
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
-    # 登録フォーム
     with st.form("list_form", clear_on_submit=True):
         col1, col2, col3 = st.columns([2, 2, 1])
         place = col1.text_input("場所")
@@ -44,25 +43,18 @@ if page == "リスト管理":
     st.subheader("登録済みのリスト")
     cats = get_data("categories")
     if cats:
-        df_cats = pd.DataFrame(cats)
-        # 表示用の表
+        df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
         display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        # 編集不可の表として表示
-        st.data_editor(
-            display_df, 
-            use_container_width=True, 
-            hide_index=True,
-            disabled=("場所", "品目")
-        )
-        
-        # 削除用UI（選択式）
         st.write("---")
-        options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
-        selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
+        # IDで一意に特定するように修正
+        options = {f"{r['place']} - {r['item']} (ID:{r['id'][-4:]})": r['id'] for _, r in df_cats.iterrows()}
+        selected_label = st.selectbox("削除する項目を選択", list(options.keys()))
         
         if st.button("選択した項目を削除する", type="primary"):
-            db.collection("categories").document(options[selected_cat]).delete()
+            target_id = options[selected_label]
+            db.collection("categories").document(target_id).delete()
             st.cache_data.clear()
             st.rerun()
     else:
