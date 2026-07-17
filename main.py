@@ -22,7 +22,6 @@ st.set_page_config(page_title="2人だけの家計簿", page_icon="💰", layout
 params = st.query_params
 user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
-# hなら大地、それ以外なら日向子とする
 current_user = "大地" if user_code == "h" else "日向子"
 
 page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "全データ管理"])
@@ -30,10 +29,11 @@ page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "
 # --- [機能1] リスト管理 ---
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
-    with st.form("list_form"):
-        place = st.text_input("場所")
-        item = st.text_input("品目")
-        if st.form_submit_button("登録する"):
+    with st.form("list_form", clear_on_submit=True):
+        col1, col2, col3 = st.columns([2, 2, 1])
+        place = col1.text_input("場所")
+        item = col2.text_input("品目")
+        if col3.form_submit_button("登録"):
             if place and item:
                 db.collection("categories").add({"place": place, "item": item})
                 st.cache_data.clear()
@@ -49,7 +49,7 @@ if page == "リスト管理":
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         
         # 削除用UI
-        with st.expander("🗑️ リストから削除する"):
+        with st.expander("🗑️ リストから項目を削除"):
             options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
             selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
             if st.button("この項目を削除"):
@@ -61,7 +61,7 @@ if page == "リスト管理":
 
 # --- [機能2] 全データ管理 ---
 elif page == "全データ管理":
-    st.header("⚠️ 全データ削除")
+    st.header("⚠️ 全データ削除の管理")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     
@@ -83,9 +83,8 @@ elif page == "全データ管理":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
-    # 修正前
-# st.title("💰 2人だけの家計簿")
-    st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
+    # 小さめのタイトル表示
+    st.markdown("<h3 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h3>", unsafe_allow_html=True)
     
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
