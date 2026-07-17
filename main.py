@@ -29,6 +29,7 @@ page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "
 # --- [機能1] リスト管理 ---
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
+    # 登録フォーム
     with st.form("list_form", clear_on_submit=True):
         col1, col2, col3 = st.columns([2, 2, 1])
         place = col1.text_input("場所")
@@ -43,19 +44,27 @@ if page == "リスト管理":
     st.subheader("登録済みのリスト")
     cats = get_data("categories")
     if cats:
-        df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
-        # 表形式で表示
+        df_cats = pd.DataFrame(cats)
+        # 表示用の表
         display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        # 削除用UI
-        with st.expander("🗑️ リストから項目を削除"):
-            options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
-            selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
-            if st.button("この項目を削除"):
-                db.collection("categories").document(options[selected_cat]).delete()
-                st.cache_data.clear()
-                st.rerun()
+        # 編集不可の表として表示
+        st.data_editor(
+            display_df, 
+            use_container_width=True, 
+            hide_index=True,
+            disabled=("場所", "品目")
+        )
+        
+        # 削除用UI（選択式）
+        st.write("---")
+        options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
+        selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
+        
+        if st.button("選択した項目を削除する", type="primary"):
+            db.collection("categories").document(options[selected_cat]).delete()
+            st.cache_data.clear()
+            st.rerun()
     else:
         st.info("リストはまだありません。")
 
