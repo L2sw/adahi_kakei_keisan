@@ -56,16 +56,16 @@ elif page == "全データ管理":
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     
-    st.write(f"大地の同意: {'✅' if status['daichi'] else '❌'}")
-    st.write(f"日向子の同意: {'✅' if status['hinako'] else '❌'}")
+    st.write(f"大地の同意: {'✅' if status.get('daichi', False) else '❌'}")
+    st.write(f"日向子の同意: {'✅' if status.get('hinako', False) else '❌'}")
     
     user_key = "daichi" if current_user == "大地" else "hinako"
-    if st.button(f"同意を切り替える (現在: {status[user_key]})"):
-        status[user_key] = not status[user_key]
+    if st.button(f"同意を切り替える (現在: {status.get(user_key, False)})"):
+        status[user_key] = not status.get(user_key, False)
         consent_ref.set(status)
         st.rerun()
     
-    if status["daichi"] and status["hinako"]:
+    if status.get("daichi", False) and status.get("hinako", False):
         if st.button("本当に全ての履歴を削除する"):
             for doc in db.collection("expenses").stream(): doc.reference.delete()
             consent_ref.set({"daichi": False, "hinako": False})
@@ -101,6 +101,7 @@ else:
     expenses = get_data("expenses")
     if expenses:
         df = pd.DataFrame(expenses)
+        # データの欠損を埋める（KeyError対策）
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
         df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
         df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
@@ -115,7 +116,6 @@ else:
         d_r, d_s = get_totals("大地")
         h_r, h_s = get_totals("日向子")
         
-        # 精算式: 大地の請求分 - 日向子の請求分
         balance = (d_r + d_s/2) - (h_r + h_s/2)
         
         st.subheader("📊 精算結果")
