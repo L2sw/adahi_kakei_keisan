@@ -54,13 +54,13 @@ data = [doc.to_dict() for doc in docs]
 
 if data:
     df = pd.DataFrame(data)
-    # 日付変換
+    # 日付変換とフォーマット（年を省く: MM/DD HH:MM）
     df["timestamp"] = pd.to_datetime([d.timestamp() if hasattr(d, 'timestamp') else d for d in df["timestamp"]], unit='s')
+    df["date_str"] = df["timestamp"].dt.strftime("%m/%d %H:%M")
     
     total_husband = df[df["person"] == "夫"]["amount"].sum()
     total_wife = df[df["person"] == "妻"]["amount"].sum()
     
-    # 貸し借り計算表示
     col_a, col_b = st.columns(2)
     col_a.metric("夫の支払い合計", f"{total_husband:,}円")
     col_b.metric("妻の支払い合計", f"{total_wife:,}円")
@@ -78,16 +78,18 @@ if data:
     st.write("### 📜 支払履歴")
     col1, col2 = st.columns(2)
     
-    # 夫のデータ
+    # 夫のデータ（indexを隠して表示）
     with col1:
         st.write("#### 夫の履歴")
-        husband_df = df[df["person"] == "夫"][["timestamp", "item", "amount"]]
-        st.dataframe(husband_df, use_container_width=True)
+        husband_df = df[df["person"] == "夫"][["date_str", "item", "amount"]]
+        husband_df.columns = ["日時", "内容", "金額"]
+        st.dataframe(husband_df, use_container_width=True, hide_index=True)
         
-    # 妻のデータ
+    # 妻のデータ（indexを隠して表示）
     with col2:
         st.write("#### 妻の履歴")
-        wife_df = df[df["person"] == "妻"][["timestamp", "item", "amount"]]
-        st.dataframe(wife_df, use_container_width=True)
+        wife_df = df[df["person"] == "妻"][["date_str", "item", "amount"]]
+        wife_df.columns = ["日時", "内容", "金額"]
+        st.dataframe(wife_df, use_container_width=True, hide_index=True)
 else:
     st.info("まだ記録はありません。")
