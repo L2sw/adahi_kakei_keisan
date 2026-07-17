@@ -39,7 +39,6 @@ if page == "リスト管理":
     st.write("---")
     st.subheader("登録済みのリスト")
     
-    # データを取得（IDも保持する）
     cats_docs = db.collection("categories").stream()
     cats_list = []
     for doc in cats_docs:
@@ -49,8 +48,6 @@ if page == "リスト管理":
     
     if cats_list:
         df_cats = pd.DataFrame(cats_list).sort_values(by=["place", "item"])
-        
-        # 行ごとに削除ボタンを配置
         for i, row in df_cats.iterrows():
             col_a, col_b = st.columns([4, 1])
             col_a.write(f"📍 {row['place']} / 🍎 {row['item']}")
@@ -78,19 +75,23 @@ else:
         selected_item = st.selectbox("内容", items_at_place)
         
         with st.form("input_form", clear_on_submit=True):
-            amount = st.number_input("金額 (円)", min_value=0, step=100)
+            # ★修正点: value=None で初期値なし、format="%d" で整数のみ許可
+            amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d", placeholder="金額を入力")
             submit = st.form_submit_button("送信する")
 
             if submit:
-                db.collection("expenses").add({
-                    "person": current_user,
-                    "place": selected_place,
-                    "item": selected_item,
-                    "amount": amount,
-                    "timestamp": firestore.SERVER_TIMESTAMP
-                })
-                st.success(f"{selected_place}で{selected_item}を{amount:,}円で購入しました！")
-                st.rerun()
+                if amount is None:
+                    st.error("金額を入力してください")
+                else:
+                    db.collection("expenses").add({
+                        "person": current_user,
+                        "place": selected_place,
+                        "item": selected_item,
+                        "amount": amount,
+                        "timestamp": firestore.SERVER_TIMESTAMP
+                    })
+                    st.success(f"{selected_place}で{selected_item}を{amount:,}円で購入しました！")
+                    st.rerun()
 
     # --- 集計と履歴表示 ---
     st.write("---")
