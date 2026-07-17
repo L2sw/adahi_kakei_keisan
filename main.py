@@ -26,8 +26,8 @@ page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理"])
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
     with st.form("list_form"):
-        place = st.text_input("場所 (例: マイバス)")
-        item = st.text_input("品目 (例: ナス)")
+        place = st.text_input("場所")
+        item = st.text_input("品目")
         if st.form_submit_button("登録する"):
             if place and item:
                 db.collection("categories").add({"place": place, "item": item})
@@ -39,7 +39,7 @@ if page == "リスト管理":
         df_cats = pd.DataFrame(cats_list).sort_values(by=["place", "item"])
         for _, row in df_cats.iterrows():
             c1, c2 = st.columns([4, 1])
-            c1.write(f"📍 {row['place']} / 🍎 {row['item']}")
+            c1.write(f"📍 {row['place']} / {row['item']}")
             if c2.button("削除", key=f"cat_{row['id']}"):
                 db.collection("categories").document(row['id']).delete()
                 st.rerun()
@@ -58,7 +58,7 @@ else:
         selected_item = st.selectbox("内容", items_at_place)
         
         with st.form("input_form", clear_on_submit=True):
-            amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d", placeholder="金額を入力")
+            amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d")
             if st.form_submit_button("送信する"):
                 if amount is not None:
                     db.collection("expenses").add({
@@ -71,36 +71,41 @@ else:
                     st.rerun()
 
     st.write("---")
-    st.subheader("📜 支払履歴 (自分の履歴のみ削除可能)")
     
+    # データ取得・整形
     docs = db.collection("expenses").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
     data = [{"id": doc.id, **doc.to_dict()} for doc in docs]
-    df = pd.DataFrame(data)
-    if not df.empty:
+    
+    if data:
+        df = pd.DataFrame(data)
+        # 必要なカラムがなければ補完
+        for col in ["place", "item", "amount"]:
+            if col not in df.columns: df[col] = "-"
+        
         df["timestamp"] = pd.to_datetime([d.timestamp() if hasattr(d, 'timestamp') else d for d in df["timestamp"]], unit='s')
         df["日時"] = df["timestamp"].dt.strftime("%m/%d %H:%M")
         
         col1, col2 = st.columns(2)
         
-        def show_history_table(target_col, user_name):
+        def show_history_compact(target_col, user_name):
             with target_col:
-                st.write(f"#### {user_name}の履歴")
+                st.subheader(f"{user_name}の履歴")
                 user_df = df[df["person"] == user_name].copy()
                 
-                # 表形式を表示
-                st.dataframe(user_df[["日時", "place", "item", "amount"]].rename(columns={"place":"場所", "item":"内容", "amount":"金額"}), 
-                             use_container_width=True, hide_index=True)
+                # 表示用テーブル (カラム名を短縮)
+                display_df = user_df[["日時", "place", "item", "amount"]].rename(
+                    columns={"place":"場所", "item":"内容", "amount":"円"}
+                )
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
                 
-                # そのユーザーの履歴だけを消せるUI
+                # 自分なら削除UIを表示
                 if user_name == current_user:
-                    with st.expander(f"⚠️ {user_name}の履歴を削除する"):
-                        # 削除したい項目をプルダウンで選ぶ
-                        del_target = st.selectbox("削除する項目を選択", user_df.apply(lambda r: f"{r['日時']} {r['place']} {r['item']} {r['amount']}円", axis=1))
+                    with st.expander(f"⚙️ {user_name}の履歴を削除"):
+                        options = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in user_df.iterrows()}
+                        selected_del = st.selectbox("削除対象を選択", list(options.keys()))
                         if st.button("この項目を削除", key=f"del_{user_name}"):
-                            # 一致するIDを探して削除
-                            target_id = user_df[user_df.apply(lambda r: f"{r['日時']} {r['place']} {r['item']} {r['amount']}円", axis=1) == del_target]["id"].values[0]
-                            db.collection("expenses").document(target_id).delete()
+                            db.collection("expenses").document(options[selected_del]).delete()
                             st.rerun()
 
-        show_history_table(col1, "夫")
-        show_history_table(col2, "妻")
+        show_history_compact(col1, "夫")
+        show_history_compact(col2, "妻")
