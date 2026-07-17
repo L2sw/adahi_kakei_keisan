@@ -13,12 +13,15 @@ db = firestore.Client(credentials=creds)
 # --- ページ設定とユーザー判別 ---
 st.set_page_config(page_title="2人だけの家計簿", page_icon="💰")
 
-# URLパラメータ ?user=夫 または ?user=妻 を取得
 params = st.query_params
-current_user = params.get("user", "夫")  # 指定がなければデフォルトで「夫」
+user_code = params.get("user", "h") # 指定がなければデフォルトで「h」
+
+# コードから名前に変換
+current_user = "夫" if user_code == "h" else "妻"
 
 st.title("💰 2人だけの家計簿")
 st.write(f"現在ログイン中: **{current_user}** さん")
+
 
 # --- 1. 入力フォーム ---
 with st.expander("📝 新しい買い物を記録する", expanded=True):
