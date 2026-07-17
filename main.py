@@ -39,16 +39,25 @@ if page == "リスト管理":
                 st.cache_data.clear()
                 st.rerun()
     
+    st.write("---")
+    st.subheader("登録済みのリスト")
     cats = get_data("categories")
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
-        for _, row in df_cats.iterrows():
-            c1, c2 = st.columns([4, 1])
-            c1.write(f"📍 {row['place']} / {row['item']}")
-            if c2.button("削除", key=f"cat_{row['id']}"):
-                db.collection("categories").document(row['id']).delete()
+        # 表形式で表示
+        display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        
+        # 削除用UI
+        with st.expander("🗑️ リストから削除する"):
+            options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
+            selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
+            if st.button("この項目を削除"):
+                db.collection("categories").document(options[selected_cat]).delete()
                 st.cache_data.clear()
                 st.rerun()
+    else:
+        st.info("リストはまだありません。")
 
 # --- [機能2] 全データ管理 ---
 elif page == "全データ管理":
@@ -101,7 +110,6 @@ else:
     expenses = get_data("expenses")
     if expenses:
         df = pd.DataFrame(expenses)
-        # データの欠損を埋める（KeyError対策）
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
         df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
         df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
