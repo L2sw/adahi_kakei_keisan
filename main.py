@@ -33,6 +33,8 @@ if page == "リスト管理":
                 db.collection("categories").add({"place": place, "item": item})
                 st.rerun()
     
+    st.write("---")
+    st.subheader("登録済みのリスト")
     cats_docs = db.collection("categories").stream()
     cats_list = [{"id": doc.id, **doc.to_dict()} for doc in cats_docs]
     if cats_list:
@@ -66,6 +68,8 @@ elif page == "全データ管理":
             for doc in db.collection("expenses").stream(): doc.reference.delete()
             consent_ref.set({"husband": False, "wife": False})
             st.rerun()
+    else:
+        st.info("二人ともが同意すると、削除ボタンが表示されます。")
 
 # --- [機能3] 家計簿入力ページ ---
 else:
@@ -92,14 +96,16 @@ else:
                     st.rerun()
 
     st.write("---")
-    # データ取得
     docs = db.collection("expenses").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
     data = [{"id": doc.id, **doc.to_dict()} for doc in docs]
     
     if data:
         df = pd.DataFrame(data)
-        # 必要なカラムがなければ補完
-        if "is_reimburse" not in df.columns: df["is_reimburse"] = False
+        # カラムの補完処理（KeyError対策）
+        for col in ["place", "item", "amount", "is_reimburse"]:
+            if col not in df.columns:
+                df[col] = False if col == "is_reimburse" else "-"
+        
         df["timestamp"] = pd.to_datetime([d.timestamp() if hasattr(d, 'timestamp') else d for d in df["timestamp"]], unit='s')
         df["日時"] = df["timestamp"].dt.strftime("%m/%d %H:%M")
         
@@ -109,7 +115,7 @@ else:
         w_reim = df[(df["person"]=="妻") & (df["is_reimburse"]==True)]["amount"].sum()
         w_split = df[(df["person"]=="妻") & (df["is_reimburse"]==False)]["amount"].sum()
         
-        # 妻が夫に払う額 = (夫の立て替え全額 + 夫の折半の半分) - (妻の立て替え全額 + 妻の折半の半分)
+        # 精算式: 夫の請求分(立て替え全額+折半半分) - 妻の請求分(立て替え全額+折半半分)
         balance = (h_reim + h_split/2) - (w_reim + w_split/2)
         
         st.subheader("📊 精算結果")
