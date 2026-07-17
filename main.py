@@ -83,7 +83,9 @@ elif page == "全データ管理":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
-    st.title("💰 2人だけの家計簿")
+    # 修正前
+# st.title("💰 2人だけの家計簿")
+    st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
     
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
