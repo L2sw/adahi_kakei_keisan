@@ -61,7 +61,7 @@ if page == "リスト管理":
 
 # --- [機能2] 全データ管理 ---
 elif page == "全データ管理":
-    st.header("⚠️ 全データ削除の管理")
+    st.header("⚠️ 全データ削除")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     
