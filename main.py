@@ -87,7 +87,7 @@ else:
         
         with st.form("input_form", clear_on_submit=True):
             amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d")
-            is_reimburse = st.checkbox("全額立て替え (相手に全額請求)")
+            is_reimburse = st.checkbox("全立替")
             if st.form_submit_button("送信する"):
                 if amount is not None:
                     db.collection("expenses").add({
@@ -131,7 +131,7 @@ else:
                 user_df = df[df["person"] == user].copy()
                 user_df["日時"] = user_df["timestamp"].dt.strftime("%m/%d %H:%M")
                 st.dataframe(user_df[["日時", "place", "item", "amount", "is_reimburse"]].rename(
-                    columns={"place":"場所", "item":"内容", "amount":"円", "is_reimburse":"請求"}), 
+                    columns={"place":"場所", "item":"内容", "amount":"円", "is_reimburse":"全立替"}), 
                     use_container_width=True, hide_index=True)
                 
                 if user == current_user:
