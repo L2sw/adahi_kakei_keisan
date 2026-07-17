@@ -31,6 +31,7 @@ if page == "リスト管理":
         if st.form_submit_button("登録する"):
             db.collection("categories").add({"place": place, "item": item})
             st.success(f"{place}に{item}を登録しました")
+            st.rerun() # 登録後すぐに反映させる
     
     st.write("---")
     st.subheader("登録済みのリスト")
@@ -38,32 +39,28 @@ if page == "リスト管理":
     cats_data = [doc.to_dict() for doc in cats_docs]
     if cats_data:
         st.dataframe(pd.DataFrame(cats_data), hide_index=True)
-    else:
-        st.info("リストはまだありません。")
 
 # --- [機能2] 家計簿入力ページ ---
 else:
     st.title("💰 2人だけの家計簿")
-    st.write(f"現在ログイン中: **{current_user}** さん")
-
+    
     # DBからリストを取得
     cats_docs = db.collection("categories").stream()
     df_cats = pd.DataFrame([doc.to_dict() for doc in cats_docs])
     
     with st.expander("📝 新しい買い物を記録する", expanded=True):
         with st.form("input_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
+            # 1. 場所の選択
+            places = sorted(df_cats["place"].unique().tolist()) if not df_cats.empty else []
+            # 場所が変わったことを検知して、下のselectboxを更新させるためにkeyを設定
+            selected_place = st.selectbox("場所", places, key="place_select")
             
-            # 場所の選択肢（リストに存在する場合のみ）
-            places = df_cats["place"].unique().tolist() if not df_cats.empty else []
-            selected_place = col1.selectbox("場所", places)
-            
-            # 選択された場所の品目のみに絞り込み
+            # 2. 選択された場所の品目に絞り込み
             items_at_place = []
             if selected_place and not df_cats.empty:
                 items_at_place = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist()
             
-            selected_item = col2.selectbox("内容", items_at_place)
+            selected_item = st.selectbox("内容", items_at_place, key="item_select")
             
             amount = st.number_input("金額 (円)", min_value=0, step=100)
             submit = st.form_submit_button("送信する")
@@ -77,30 +74,21 @@ else:
                     "timestamp": firestore.SERVER_TIMESTAMP
                 })
                 st.success(f"{selected_place}で{selected_item}を{amount:,}円で購入しました！")
+                st.rerun()
 
     # --- 集計と履歴表示 ---
     st.write("---")
-    st.subheader("📊 現在の収支状況")
     docs = db.collection("expenses").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
     data = [doc.to_dict() for doc in docs]
 
     if data:
         df = pd.DataFrame(data)
-        # 過去データで不足しているカラムを補完
         for col in ["place", "item"]:
             if col not in df.columns: df[col] = "未設定"
         
         df["timestamp"] = pd.to_datetime([d.timestamp() if hasattr(d, 'timestamp') else d for d in df["timestamp"]], unit='s')
         df["date_str"] = df["timestamp"].dt.strftime("%m/%d %H:%M")
         
-        total_husband = df[df["person"] == "夫"]["amount"].sum()
-        total_wife = df[df["person"] == "妻"]["amount"].sum()
-        
-        col_a, col_b = st.columns(2)
-        col_a.metric("夫の支払い合計", f"{total_husband:,}円")
-        col_b.metric("妻の支払い合計", f"{total_wife:,}円")
-        
-        # 履歴表示
         st.write("### 📜 支払履歴")
         col1, col2 = st.columns(2)
         with col1:
