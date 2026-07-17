@@ -2,58 +2,70 @@ import streamlit as st
 from google.cloud import firestore
 from google.oauth2 import service_account
 import json
+import pandas as pd
 
 # --- データベース接続 ---
-def get_db():
-    # GitHub Secretsの "textkey" を使用
-    key_dict = json.loads(st.secrets["textkey"])
-    creds = service_account.Credentials.from_service_account_info(key_dict)
-    return firestore.Client(credentials=creds)
+# GitHub Secretsまたはローカルのsecrets.tomlから読み込みます
+key_dict = json.loads(st.secrets["textkey"])
+creds = service_account.Credentials.from_service_account_info(key_dict)
+db = firestore.Client(credentials=creds)
 
-db = get_db()
-
-st.title("💸 2人専用 家計簿アプリ")
+st.set_page_config(page_title="2人だけの家計簿", page_icon="💰")
+st.title("💰 2人だけの家計簿")
 
 # --- 1. 入力フォーム ---
-with st.form("input_form"):
-    person = st.selectbox("誰が払った？", ["Aさん", "Bさん"])
-    amount = st.number_input("金額", min_value=0, step=100)
-    item = st.text_input("何に使った？")
-    submit = st.form_submit_button("記録する")
+with st.expander("📝 新しい買い物を記録する", expanded=True):
+    with st.form("input_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        person = col1.selectbox("購入者", ["夫", "妻"])
+        amount = col2.number_input("金額 (円)", min_value=0, step=100)
+        item = st.text_input("内容 (何に使った？)")
+        submit = st.form_submit_button("送信する")
 
-    if submit:
-        db.collection("expenses").add({
-            "person": person,
-            "amount": amount,
-            "item": item,
-            "timestamp": firestore.SERVER_TIMESTAMP
-        })
-        st.success("記録しました！")
+        if submit:
+            if item == "":
+                st.error("内容を入力してください！")
+            else:
+                db.collection("expenses").add({
+                    "person": person,
+                    "amount": amount,
+                    "item": item,
+                    "timestamp": firestore.SERVER_TIMESTAMP
+                })
+                st.success(f"{person}さんが {amount:,}円 を追加しました！")
 
-# --- 2. データの取得と計算 ---
-expenses = [doc.to_dict() for doc in db.collection("expenses").stream()]
+# --- 2. データの表示と計算 ---
+st.write("---")
+st.subheader("📊 現在の収支状況")
 
-if expenses:
-    # 集計処理
-    total_a = sum(e["amount"] for e in expenses if e["person"] == "Aさん")
-    total_b = sum(e["amount"] for e in expenses if e["person"] == "Bさん")
+# データを取得してデータフレームに変換
+docs = db.collection("expenses").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
+data = [doc.to_dict() for doc in docs]
+
+if data:
+    df = pd.DataFrame(data)
+    
+    # 夫と妻の合計を計算
+    total_husband = df[df["person"] == "夫"]["amount"].sum()
+    total_wife = df[df["person"] == "妻"]["amount"].sum()
     
     # 計算ロジック
-    diff = (total_a - total_b) / 2
+    diff = (total_husband - total_wife) / 2
     
-    # 画面表示
-    st.write("---")
-    col1, col2 = st.columns(2)
-    col1.metric("Aさんの合計", f"{total_a:,}円")
-    col2.metric("Bさんの合計", f"{total_b:,}円")
+    col_a, col_b = st.columns(2)
+    col_a.metric("夫の支払い合計", f"{total_husband:,}円")
+    col_b.metric("妻の支払い合計", f"{total_wife:,}円")
     
     if diff > 0:
-        st.info(f"結論: BさんがAさんに {int(diff):,} 円 払うと折半完了です！")
+        st.warning(f"👉 妻が夫へ {int(diff):,} 円 渡すと折半完了です")
     elif diff < 0:
-        st.info(f"結論: AさんがBさんに {int(abs(diff)):,} 円 払うと折半完了です！")
+        st.warning(f"👉 夫が妻へ {int(abs(diff)):,} 円 渡すと折半完了です")
     else:
         st.success("今のところ貸し借りなし！")
 
-    # 履歴表示
-    st.write("### 履歴")
-    st.table(expenses)
+    # 履歴テーブル
+    st.write("### 履歴一覧")
+    display_df = df[["timestamp", "person", "item", "amount"]]
+    st.dataframe(display_df, use_container_width=True)
+else:
+    st.info("まだ記録はありません。買い物を追加してみましょう！")
