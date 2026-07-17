@@ -13,15 +13,20 @@ db = firestore.Client(credentials=creds)
 # --- ページ設定とユーザー判別 ---
 st.set_page_config(page_title="2人だけの家計簿", page_icon="💰")
 
+# URLパラメータ ?user=h または ?user=w を取得
 params = st.query_params
-user_code = params.get("user", "h") # 指定がなければデフォルトで「h」
+# 値を確実に文字列として取得するための処理
+user_code = params.get("user")
+if isinstance(user_code, list):
+    user_code = user_code[0]
+if user_code is None:
+    user_code = "h"  # 指定がなければデフォルトは「夫(h)」
 
 # コードから名前に変換
 current_user = "夫" if user_code == "h" else "妻"
 
 st.title("💰 2人だけの家計簿")
 st.write(f"現在ログイン中: **{current_user}** さん")
-
 
 # --- 1. 入力フォーム ---
 with st.expander("📝 新しい買い物を記録する", expanded=True):
@@ -79,7 +84,8 @@ if data:
     
     # タイムスタンプを読みやすい形式に変換
     if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], unit='s')
+        # Firestoreのタイムスタンプをdatetimeに変換
+        df["timestamp"] = pd.to_datetime([d.timestamp() if hasattr(d, 'timestamp') else d for d in df["timestamp"]], unit='s')
         display_df = df[["timestamp", "person", "item", "amount"]]
         st.dataframe(display_df, use_container_width=True)
     else:
