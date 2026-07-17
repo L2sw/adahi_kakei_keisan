@@ -48,8 +48,8 @@ if page == "リスト管理":
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         
         st.write("---")
-        # IDで一意に特定するように修正
-        options = {f"{r['place']} - {r['item']} (ID:{r['id'][-4:]})": r['id'] for _, r in df_cats.iterrows()}
+        # 【修正済】選択肢をIDベースで一意にし、誤削除を防止
+        options = {f"{r['place']} - {r['item']} [ID:{r['id']}]": r['id'] for _, r in df_cats.iterrows()}
         selected_label = st.selectbox("削除する項目を選択", list(options.keys()))
         
         if st.button("選択した項目を削除する", type="primary"):
