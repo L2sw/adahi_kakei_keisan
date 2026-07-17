@@ -37,8 +37,14 @@ if page == "リスト管理":
     st.subheader("登録済みのリスト")
     cats_docs = db.collection("categories").stream()
     cats_data = [doc.to_dict() for doc in cats_docs]
+    
     if cats_data:
-        st.dataframe(pd.DataFrame(cats_data), hide_index=True)
+        df_cats = pd.DataFrame(cats_data)
+        # 場所でソートして、見出しを分かりやすくする
+        df_cats = df_cats.sort_values(by=["place", "item"])
+        st.dataframe(df_cats, use_container_width=True, hide_index=True)
+    else:
+        st.info("リストはまだありません。")
 
 # --- [機能2] 家計簿入力ページ ---
 else:
@@ -53,7 +59,7 @@ else:
         places = sorted(df_cats["place"].unique().tolist()) if not df_cats.empty else []
         selected_place = st.selectbox("場所", places)
         
-        # 2. 選択された場所の品目に絞り込み（フォームの外）
+        # 2. 選択された場所の品目に絞り込み
         items_at_place = []
         if selected_place and not df_cats.empty:
             items_at_place = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist()
