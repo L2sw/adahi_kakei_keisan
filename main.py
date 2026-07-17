@@ -31,7 +31,7 @@ if page == "リスト管理":
         if st.form_submit_button("登録する"):
             db.collection("categories").add({"place": place, "item": item})
             st.success(f"{place}に{item}を登録しました")
-            st.rerun() # 登録後すぐに反映させる
+            st.rerun()
     
     st.write("---")
     st.subheader("登録済みのリスト")
@@ -49,19 +49,19 @@ else:
     df_cats = pd.DataFrame([doc.to_dict() for doc in cats_docs])
     
     with st.expander("📝 新しい買い物を記録する", expanded=True):
+        # 1. 場所の選択（フォームの外）
+        places = sorted(df_cats["place"].unique().tolist()) if not df_cats.empty else []
+        selected_place = st.selectbox("場所", places)
+        
+        # 2. 選択された場所の品目に絞り込み（フォームの外）
+        items_at_place = []
+        if selected_place and not df_cats.empty:
+            items_at_place = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist()
+        
+        selected_item = st.selectbox("内容", items_at_place)
+        
+        # 3. フォームで金額のみを入力
         with st.form("input_form", clear_on_submit=True):
-            # 1. 場所の選択
-            places = sorted(df_cats["place"].unique().tolist()) if not df_cats.empty else []
-            # 場所が変わったことを検知して、下のselectboxを更新させるためにkeyを設定
-            selected_place = st.selectbox("場所", places, key="place_select")
-            
-            # 2. 選択された場所の品目に絞り込み
-            items_at_place = []
-            if selected_place and not df_cats.empty:
-                items_at_place = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist()
-            
-            selected_item = st.selectbox("内容", items_at_place, key="item_select")
-            
             amount = st.number_input("金額 (円)", min_value=0, step=100)
             submit = st.form_submit_button("送信する")
 
