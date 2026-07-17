@@ -29,20 +29,34 @@ if page == "リスト管理":
         place = st.text_input("場所 (例: マイバス)")
         item = st.text_input("品目 (例: ナス)")
         if st.form_submit_button("登録する"):
-            db.collection("categories").add({"place": place, "item": item})
-            st.success(f"{place}に{item}を登録しました")
-            st.rerun()
+            if place and item:
+                db.collection("categories").add({"place": place, "item": item})
+                st.success(f"{place}に{item}を登録しました")
+                st.rerun()
+            else:
+                st.error("場所と品目を入力してください")
     
     st.write("---")
     st.subheader("登録済みのリスト")
-    cats_docs = db.collection("categories").stream()
-    cats_data = [doc.to_dict() for doc in cats_docs]
     
-    if cats_data:
-        df_cats = pd.DataFrame(cats_data)
-        # 場所でソートして、見出しを分かりやすくする
-        df_cats = df_cats.sort_values(by=["place", "item"])
-        st.dataframe(df_cats, use_container_width=True, hide_index=True)
+    # データを取得（IDも保持する）
+    cats_docs = db.collection("categories").stream()
+    cats_list = []
+    for doc in cats_docs:
+        d = doc.to_dict()
+        d["id"] = doc.id
+        cats_list.append(d)
+    
+    if cats_list:
+        df_cats = pd.DataFrame(cats_list).sort_values(by=["place", "item"])
+        
+        # 行ごとに削除ボタンを配置
+        for i, row in df_cats.iterrows():
+            col_a, col_b = st.columns([4, 1])
+            col_a.write(f"📍 {row['place']} / 🍎 {row['item']}")
+            if col_b.button("削除", key=row['id']):
+                db.collection("categories").document(row['id']).delete()
+                st.rerun()
     else:
         st.info("リストはまだありません。")
 
@@ -50,23 +64,19 @@ if page == "リスト管理":
 else:
     st.title("💰 2人だけの家計簿")
     
-    # DBからリストを取得
     cats_docs = db.collection("categories").stream()
     df_cats = pd.DataFrame([doc.to_dict() for doc in cats_docs])
     
     with st.expander("📝 新しい買い物を記録する", expanded=True):
-        # 1. 場所の選択（フォームの外）
         places = sorted(df_cats["place"].unique().tolist()) if not df_cats.empty else []
         selected_place = st.selectbox("場所", places)
         
-        # 2. 選択された場所の品目に絞り込み
         items_at_place = []
         if selected_place and not df_cats.empty:
             items_at_place = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist()
         
         selected_item = st.selectbox("内容", items_at_place)
         
-        # 3. フォームで金額のみを入力
         with st.form("input_form", clear_on_submit=True):
             amount = st.number_input("金額 (円)", min_value=0, step=100)
             submit = st.form_submit_button("送信する")
