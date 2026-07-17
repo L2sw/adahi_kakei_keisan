@@ -34,29 +34,35 @@ if page == "リスト管理":
     
     st.write("---")
     st.subheader("登録済みのリスト")
-    cats = [doc.to_dict() for doc in db.collection("categories").stream()]
-    if cats:
-        st.dataframe(pd.DataFrame(cats), hide_index=True)
+    cats_docs = db.collection("categories").stream()
+    cats_data = [doc.to_dict() for doc in cats_docs]
+    if cats_data:
+        st.dataframe(pd.DataFrame(cats_data), hide_index=True)
+    else:
+        st.info("リストはまだありません。")
 
 # --- [機能2] 家計簿入力ページ ---
 else:
     st.title("💰 2人だけの家計簿")
     st.write(f"現在ログイン中: **{current_user}** さん")
 
-    # DBから場所と品目のリストを取得
-    cats = [doc.to_dict() for doc in db.collection("categories").stream()]
-    df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
-
+    # DBからリストを取得
+    cats_docs = db.collection("categories").stream()
+    df_cats = pd.DataFrame([doc.to_dict() for doc in cats_docs])
+    
     with st.expander("📝 新しい買い物を記録する", expanded=True):
         with st.form("input_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             
-            # 場所の選択肢（重複を除去）
+            # 場所の選択肢（リストに存在する場合のみ）
             places = df_cats["place"].unique().tolist() if not df_cats.empty else []
             selected_place = col1.selectbox("場所", places)
             
-            # 選択された場所に基づく品目の絞り込み
-            items_at_place = df_cats[df_cats["place"] == selected_place]["item"].tolist() if selected_place else []
+            # 選択された場所の品目のみに絞り込み
+            items_at_place = []
+            if selected_place and not df_cats.empty:
+                items_at_place = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist()
+            
             selected_item = col2.selectbox("内容", items_at_place)
             
             amount = st.number_input("金額 (円)", min_value=0, step=100)
@@ -80,6 +86,10 @@ else:
 
     if data:
         df = pd.DataFrame(data)
+        # 過去データで不足しているカラムを補完
+        for col in ["place", "item"]:
+            if col not in df.columns: df[col] = "未設定"
+        
         df["timestamp"] = pd.to_datetime([d.timestamp() if hasattr(d, 'timestamp') else d for d in df["timestamp"]], unit='s')
         df["date_str"] = df["timestamp"].dt.strftime("%m/%d %H:%M")
         
@@ -90,21 +100,14 @@ else:
         col_a.metric("夫の支払い合計", f"{total_husband:,}円")
         col_b.metric("妻の支払い合計", f"{total_wife:,}円")
         
-        diff = (total_husband - total_wife) / 2
-        if diff > 0: st.warning(f"👉 妻が夫へ {int(diff):,} 円 渡すと折半完了です")
-        elif diff < 0: st.warning(f"👉 夫が妻へ {int(abs(diff)):,} 円 渡すと折半完了です")
-        else: st.success("今のところ貸し借りなし！")
-
-        st.write("---")
+        # 履歴表示
         st.write("### 📜 支払履歴")
         col1, col2 = st.columns(2)
-        
         with col1:
             st.write("#### 夫の履歴")
             h_df = df[df["person"] == "夫"][["date_str", "place", "item", "amount"]]
             h_df.columns = ["日時", "場所", "内容", "金額"]
             st.dataframe(h_df, use_container_width=True, hide_index=True)
-            
         with col2:
             st.write("#### 妻の履歴")
             w_df = df[df["person"] == "妻"][["date_str", "place", "item", "amount"]]
