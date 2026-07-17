@@ -9,7 +9,7 @@ key_dict = json.loads(st.secrets["textkey"])
 creds = service_account.Credentials.from_service_account_info(key_dict)
 db = firestore.Client(credentials=creds)
 
-# --- パフォーマンス向上 ---
+# --- キャッシュ ---
 @st.cache_data(ttl=60)
 def get_data(collection):
     docs = db.collection(collection).stream()
@@ -26,7 +26,7 @@ current_user = "大地" if user_code == "h" else "日向子"
 
 page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "全データ管理"])
 
-# --- [機能1] リスト管理 ---
+# --- [機能1] リスト管理 (確実な削除UI) ---
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
     with st.form("list_form", clear_on_submit=True):
@@ -40,23 +40,20 @@ if page == "リスト管理":
                 st.rerun()
     
     st.write("---")
-    st.subheader("登録済みのリスト")
     cats = get_data("categories")
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
-        display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        st.write("---")
-        # 【修正済】選択肢をIDベースで一意にし、誤削除を防止
-        options = {f"{r['place']} - {r['item']} [ID:{r['id']}]": r['id'] for _, r in df_cats.iterrows()}
-        selected_label = st.selectbox("削除する項目を選択", list(options.keys()))
-        
-        if st.button("選択した項目を削除する", type="primary"):
-            target_id = options[selected_label]
-            db.collection("categories").document(target_id).delete()
-            st.cache_data.clear()
-            st.rerun()
+        # 各行に削除ボタンを配置（スマホでも押しやすい工夫）
+        for _, row in df_cats.iterrows():
+            col_a, col_b, col_c = st.columns([2, 2, 1])
+            col_a.write(row['place'])
+            col_b.write(row['item'])
+            # 削除ボタン（キーをIDに固定することで確実に指定行を削除）
+            if col_c.button("削除", key=f"del_{row['id']}"):
+                db.collection("categories").document(row['id']).delete()
+                st.cache_data.clear()
+                st.rerun()
     else:
         st.info("リストはまだありません。")
 
@@ -84,7 +81,6 @@ elif page == "全データ管理":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
-    # 小さめのタイトル表示
     st.markdown("<h3 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h3>", unsafe_allow_html=True)
     
     cats = get_data("categories")
@@ -133,7 +129,6 @@ else:
         elif balance < 0: st.warning(f"👉 **大地から日向子へ {int(abs(balance)):,} 円 支払ってください**")
         else: st.success("貸し借りなし！")
         
-        # --- 履歴表示 ---
         col1, col2 = st.columns(2)
         def show_history(col, user):
             with col:
