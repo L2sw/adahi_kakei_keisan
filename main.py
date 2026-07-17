@@ -40,18 +40,14 @@ if page == "リスト管理":
     st.subheader("登録済みのリスト")
     
     cats_docs = db.collection("categories").stream()
-    cats_list = []
-    for doc in cats_docs:
-        d = doc.to_dict()
-        d["id"] = doc.id
-        cats_list.append(d)
+    cats_list = [{"id": doc.id, **doc.to_dict()} for doc in cats_docs]
     
     if cats_list:
         df_cats = pd.DataFrame(cats_list).sort_values(by=["place", "item"])
         for i, row in df_cats.iterrows():
             col_a, col_b = st.columns([4, 1])
             col_a.write(f"📍 {row['place']} / 🍎 {row['item']}")
-            if col_b.button("削除", key=row['id']):
+            if col_b.button("削除", key=f"cat_{row['id']}"):
                 db.collection("categories").document(row['id']).delete()
                 st.rerun()
     else:
@@ -75,7 +71,6 @@ else:
         selected_item = st.selectbox("内容", items_at_place)
         
         with st.form("input_form", clear_on_submit=True):
-            # ★修正点: value=None で初期値なし、format="%d" で整数のみ許可
             amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d", placeholder="金額を入力")
             submit = st.form_submit_button("送信する")
 
@@ -95,26 +90,38 @@ else:
 
     # --- 集計と履歴表示 ---
     st.write("---")
+    st.subheader("📊 現在の収支状況")
+    
+    # IDを含めて取得
     docs = db.collection("expenses").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
-    data = [doc.to_dict() for doc in docs]
+    data = [{"id": doc.id, **doc.to_dict()} for doc in docs]
 
     if data:
         df = pd.DataFrame(data)
+        # 過去データで不足しているカラムを補完
         for col in ["place", "item"]:
             if col not in df.columns: df[col] = "未設定"
         
         df["timestamp"] = pd.to_datetime([d.timestamp() if hasattr(d, 'timestamp') else d for d in df["timestamp"]], unit='s')
-        df["date_str"] = df["timestamp"].dt.strftime("%m/%d %H:%M")
         
+        # --- 左右に並べる履歴表示（削除ボタン付き） ---
         st.write("### 📜 支払履歴")
         col1, col2 = st.columns(2)
-        with col1:
-            st.write("#### 夫の履歴")
-            h_df = df[df["person"] == "夫"][["date_str", "place", "item", "amount"]]
-            h_df.columns = ["日時", "場所", "内容", "金額"]
-            st.dataframe(h_df, use_container_width=True, hide_index=True)
-        with col2:
-            st.write("#### 妻の履歴")
-            w_df = df[df["person"] == "妻"][["date_str", "place", "item", "amount"]]
-            w_df.columns = ["日時", "場所", "内容", "金額"]
-            st.dataframe(w_df, use_container_width=True, hide_index=True)
+        
+        def show_history(target_col, user_name):
+            with target_col:
+                st.write(f"#### {user_name}の履歴")
+                user_df = df[df["person"] == user_name]
+                for _, row in user_df.iterrows():
+                    c1, c2, c3 = st.columns([2, 2, 1])
+                    c1.write(f"{row['timestamp'].strftime('%m/%d %H:%M')}")
+                    c2.write(f"{row['place']} / {row['item']} ({row['amount']:,}円)")
+                    if c3.button("削除", key=f"exp_{row['id']}"):
+                        db.collection("expenses").document(row['id']).delete()
+                        st.rerun()
+
+        show_history(col1, "夫")
+        show_history(col2, "妻")
+        
+    else:
+        st.info("まだ記録はありません。")
