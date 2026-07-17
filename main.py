@@ -5,20 +5,27 @@ import json
 import pandas as pd
 
 # --- データベース接続 ---
-# GitHub Secretsまたはローカルのsecrets.tomlから読み込みます
+# GitHub Secretsから "textkey" を読み込む
 key_dict = json.loads(st.secrets["textkey"])
 creds = service_account.Credentials.from_service_account_info(key_dict)
 db = firestore.Client(credentials=creds)
 
+# --- ページ設定とユーザー判別 ---
 st.set_page_config(page_title="2人だけの家計簿", page_icon="💰")
+
+# URLパラメータ ?user=夫 または ?user=妻 を取得
+params = st.query_params
+current_user = params.get("user", "夫")  # 指定がなければデフォルトで「夫」
+
 st.title("💰 2人だけの家計簿")
+st.write(f"現在ログイン中: **{current_user}** さん")
 
 # --- 1. 入力フォーム ---
 with st.expander("📝 新しい買い物を記録する", expanded=True):
     with st.form("input_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        person = col1.selectbox("購入者", ["夫", "妻"])
-        amount = col2.number_input("金額 (円)", min_value=0, step=100)
+        st.write(f"購入者: {current_user}")
+        
+        amount = st.number_input("金額 (円)", min_value=0, step=100)
         item = st.text_input("内容 (何に使った？)")
         submit = st.form_submit_button("送信する")
 
@@ -27,12 +34,12 @@ with st.expander("📝 新しい買い物を記録する", expanded=True):
                 st.error("内容を入力してください！")
             else:
                 db.collection("expenses").add({
-                    "person": person,
+                    "person": current_user,
                     "amount": amount,
                     "item": item,
                     "timestamp": firestore.SERVER_TIMESTAMP
                 })
-                st.success(f"{person}さんが {amount:,}円 を追加しました！")
+                st.success(f"{current_user}さんが {amount:,}円 を追加しました！")
 
 # --- 2. データの表示と計算 ---
 st.write("---")
@@ -52,6 +59,7 @@ if data:
     # 計算ロジック
     diff = (total_husband - total_wife) / 2
     
+    # 画面表示
     col_a, col_b = st.columns(2)
     col_a.metric("夫の支払い合計", f"{total_husband:,}円")
     col_b.metric("妻の支払い合計", f"{total_wife:,}円")
@@ -63,9 +71,15 @@ if data:
     else:
         st.success("今のところ貸し借りなし！")
 
-    # 履歴テーブル
+    # 履歴一覧表示
     st.write("### 履歴一覧")
-    display_df = df[["timestamp", "person", "item", "amount"]]
-    st.dataframe(display_df, use_container_width=True)
+    
+    # タイムスタンプを読みやすい形式に変換
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit='s')
+        display_df = df[["timestamp", "person", "item", "amount"]]
+        st.dataframe(display_df, use_container_width=True)
+    else:
+        st.dataframe(df, use_container_width=True)
 else:
     st.info("まだ記録はありません。買い物を追加してみましょう！")
