@@ -24,7 +24,7 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット📊", "管理者設定⚠️"])
+page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- [機能1] リスト管理 ---
 if page == "リスト管理🐇":
@@ -48,7 +48,7 @@ if page == "リスト管理🐇":
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
         st.dataframe(df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"}), use_container_width=True, hide_index=True)
-        with st.expander("🗑️ リストから削除🐸"):
+        with st.expander("🏺リストから削除🐸"):
             options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
             sel = st.selectbox("削除する項目を選択", list(options.keys()))
             if st.button("この項目を削除"):
@@ -57,8 +57,8 @@ if page == "リスト管理🐇":
                 st.rerun()
 
 # --- [機能2] 月別集計・リセット ---
-elif page == "月別集計・リセット📊":
-    st.header("📊 月別集計と精算リセット")
+elif page == "月別集計・リセット🐻":
+    st.header("🐻月支出・精算リセット")
     all_expenses = get_data("expenses")
     if all_expenses:
         df_all = pd.DataFrame(all_expenses)
@@ -70,7 +70,7 @@ elif page == "月別集計・リセット📊":
                 st.dataframe(df_m[["person", "place", "item", "amount"]].rename(columns={"person": "担当", "place": "場所", "item": "品目", "amount": "金額(円)"}), use_container_width=True, hide_index=True)
     
     st.write("---")
-    st.subheader("🔄 精算リセット（両名の同意が必要）")
+    st.subheader("🐢精算リセット（両名の同意が必要）")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     st.write(f"大地: {'✅' if status.get('daichi') else '❌'} | 日向子: {'✅' if status.get('hinako') else '❌'}")
@@ -86,8 +86,8 @@ elif page == "月別集計・リセット📊":
             st.cache_data.clear(); st.rerun()
 
 # --- [機能4] 管理者設定(削除ページ) ---
-elif page == "管理者設定⚠️":
-    st.header("⚠️ 管理者設定（完全削除）")
+elif page == "管理者設定🍖":
+    st.header("🌎管理者設定（完全削除）")
     st.warning("この操作は取り消せません。両名の同意が必要です。")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
