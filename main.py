@@ -174,7 +174,7 @@ else:
                 st.subheader(f"{u}の履歴")
                 udf = df[df["person"]==u].copy()
                 udf["日時"] = udf["timestamp"].dt.strftime("%m/%d %H:%M")
-                st.dataframe(udf[["日時", "場所", "品", "額", "建替"]], use_container_width=True, hide_index=True)
+                        st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]], use_container_width=True, hide_index=True)
                 if u == current_user:
                     with st.expander("🍅 削除"): 
                         opts = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in udf.iterrows()}
