@@ -75,7 +75,7 @@ elif page == "月別集計・リセット🐻":
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     st.write(f"大地: {'✅' if status.get('daichi') else '❌'} | 日向子: {'✅' if status.get('hinako') else '❌'}")
     user_key = "daichi" if current_user == "大地" else "hinako"
-    if st.button(f"同意切替: {status.get(user_key, False)}"):
+    if st.button(f"同意切替🐦"):
         status[user_key] = not status.get(user_key, False)
         consent_ref.set(status)
         st.rerun()
