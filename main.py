@@ -104,7 +104,6 @@ elif page == "管理者設定🍖":
     confirm = st.checkbox("上記リスクを理解し、削除に同意します")
     if confirm and status.get("daichi") and status.get("hinako"):
         st.write("---")
-        # 月別削除機能
         if all_expenses:
             df_all = pd.DataFrame(all_expenses)
             df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], unit='s')
@@ -132,17 +131,26 @@ else:
     st.markdown("## 🐘 2人だけの家計簿")
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
+    
     with st.expander("🐔記録する", expanded=True):
-        col1, col2 = st.columns(2)
-        sel_p = col1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()))
-        txt_p = col1.text_input("場所入力(優先)")
-        place = txt_p if txt_p else sel_p
-        sel_i = col2.selectbox("品目選択", [""] + (df_cats[df_cats["place"]==place]["item"].unique().tolist() if place in df_cats["place"].values else []))
-        txt_i = col2.text_input("品目入力(優先)")
-        item = txt_i if txt_i else sel_i
         with st.form("input_form", clear_on_submit=True):
-            amount = st.number_input("金額(円)", value=None, min_value=0, step=1, format="%d")
-            reimburse = st.checkbox("全立替")
+            # 1段目: 場所
+            c1, c2 = st.columns(2)
+            sel_p = c1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()))
+            txt_p = c2.text_input("場所(直接)")
+            place = txt_p if txt_p else sel_p
+            
+            # 2段目: 品目
+            c3, c4 = st.columns(2)
+            sel_i = c3.selectbox("品目選択", [""] + (df_cats[df_cats["place"]==place]["item"].unique().tolist() if place in df_cats["place"].values else []))
+            txt_i = c4.text_input("品目(直接)")
+            item = txt_i if txt_i else sel_i
+            
+            # 3段目: 金額と立替
+            c5, c6 = st.columns([2, 1])
+            amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d")
+            reimburse = c6.checkbox("全立替")
+            
             if st.form_submit_button("送信"):
                 if amount and place and item:
                     db.collection("expenses").add({"person": current_user, "place": place, "item": item, "amount": int(amount), "is_reimburse": bool(reimburse), "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False})
@@ -176,7 +184,7 @@ else:
                 udf["日時"] = udf["timestamp"].dt.strftime("%m/%d %H:%M")
                 st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]], use_container_width=True, hide_index=True)
                 if u == current_user:
-                    with st.expander("🍅 削除"): 
+                    with st.expander("🍅 削除"):
                         opts = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in udf.iterrows()}
                         sel = st.selectbox("選択", opts.keys())
                         if st.button("削除", key=f"del_{u}"):
