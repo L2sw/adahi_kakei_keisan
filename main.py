@@ -22,7 +22,6 @@ st.set_page_config(page_title="2人だけの家計簿", page_icon="💰", layout
 params = st.query_params
 user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
-# hなら大地、それ以外なら日向子とする
 current_user = "大地" if user_code == "h" else "日向子"
 
 page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "全データ管理"])
@@ -41,17 +40,23 @@ if page == "リスト管理":
         item = st.text_input("品目") 
         if st.form_submit_button("登録する"):
             if place and item:
-                db.collection("categories").add({"place": place, "item": item})
-                st.session_state.last_place = place
-                st.cache_data.clear()
-                st.rerun()
+                # 重複チェック
+                cats = get_data("categories")
+                is_duplicate = any(c["place"] == place and c["item"] == item for c in cats)
+                
+                if is_duplicate:
+                    st.error("その「場所」と「品目」の組み合わせは既に登録されています。")
+                else:
+                    db.collection("categories").add({"place": place, "item": item})
+                    st.session_state.last_place = place
+                    st.cache_data.clear()
+                    st.rerun()
     
     st.write("---")
     st.subheader("登録済みのリスト")
     cats = get_data("categories")
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
-        # 表形式で表示
         display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         
@@ -90,7 +95,7 @@ elif page == "全データ管理":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
-    st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_annotation_html=True)
     
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
@@ -153,7 +158,6 @@ else:
             columns={"person": "担当", "place":"場所", "item":"内容", "amount":"円"}), 
             use_container_width=True, hide_index=True)
         
-        # 個別の削除UIはスマホで見づらくなるため、ここでは各人の履歴削除欄を整理
         col1, col2 = st.columns(2)
         def show_delete_ui(col, user):
             with col:
