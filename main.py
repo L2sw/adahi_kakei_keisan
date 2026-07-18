@@ -15,11 +15,16 @@ def get_data(collection):
     docs = db.collection(collection).stream()
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
 
-# タイムスタンプを安全に日本時間(JST)へ変換する共通関数
+# タイムスタンプを安全に日本時間(JST)へ変換する共通関数 (修正版)
 def safe_to_jst(df_series):
+    if df_series.empty:
+        return pd.to_datetime(df_series).dt.tz_localize('UTC').dt.tz_convert('Asia/Tokyo')
+        
     timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_series]
     dt_series = pd.to_datetime(timestamps, errors='coerce')
-    if dt_series.dt.tz is None:
+    
+    # タイムゾーンの有無を正しく判定してJSTに変換
+    if dt_series.tz is None:
         dt_series = dt_series.dt.tz_localize('UTC')
     return dt_series.dt.tz_convert('Asia/Tokyo')
 
