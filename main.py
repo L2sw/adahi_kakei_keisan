@@ -73,7 +73,7 @@ elif page == "月別集計・リセット🐻":
         for month in sorted(df_all["month"].dropna().unique(), reverse=True):
             df_m = df_all[df_all["month"] == month]
             with st.expander(f"{month} (合計: {df_m['amount'].sum():,}円)"):
-                st.dataframe(df_m[["person", "place", "item", "amount"]].rename(columns={"person": "担当", "place": "場所", "item": "品目", "amount": "金額(円)"}), use_container_width=True, hide_index=True)
+                st.dataframe(df_m[["person", "place", "item", "amount"]].rename(columns={"person": "誰", "place": "場所", "item": "品", "amount": "￥"}), use_container_width=True, hide_index=True)
      
     st.write("---")
     st.subheader("🐢精算リセット（両名の同意が必要）")
@@ -160,7 +160,7 @@ else:
         txt_i = c4.text_input("品目(直接入力)", label_visibility="collapsed", placeholder="品(直入力)🥬")
          
         c5, c6 = st.columns([2, 1])
-        amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d", label_visibility="collapsed", placeholder="金額🌲")
+        amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d", label_visibility="collapsed", placeholder="￥🌲")
         reimburse = c6.checkbox("全立替")
          
         if st.button("送信"):
