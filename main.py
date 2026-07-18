@@ -94,7 +94,7 @@ elif page == "月別集計・リセット🐻":
 # --- [機能4] 管理者設定(削除ページ) ---
 elif page == "管理者設定🍖":
     st.header("🌎管理者設定（完全削除）")
-    st.warning("この操作は取り消せるません。両名の同意が必要です。")
+    st.warning("この操作は取り消せません。両名の同意が必要です。")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     all_expenses = get_data("expenses")
@@ -202,9 +202,10 @@ else:
             with c:
                 st.subheader(f"{u}の履歴")
                 udf = df[df["person"]==u].copy()
-                # 日時の表示形式（空データはハイフンにする）
-                udf["日時"] = udf["timestamp"].dt.strftime("%m/%d %H:%M").fillna("-")
-                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]].rename(columns={"place": "場所", "item": "品", "amount": "額", "is_reimburse": "建替"}), use_container_width=True, hide_index=True)
+                # 日時の表示形式（ゼロ埋めなし形式に変更）
+                udf["日時"] = udf["timestamp"].dt.strftime("%-m/%-d %H:%M").fillna("-")
+                # is_reimburse を 「T」に変更
+                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]].rename(columns={"place": "場所", "item": "品", "amount": "額", "is_reimburse": "T"}), use_container_width=True, hide_index=True)
                 if u == current_user:
                     with st.expander("🍅 削除"):
                         opts = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in udf.iterrows()}
