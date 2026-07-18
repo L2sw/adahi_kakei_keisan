@@ -62,9 +62,13 @@ elif page == "月別集計・リセット🐻":
     all_expenses = get_data("expenses")
     if all_expenses:
         df_all = pd.DataFrame(all_expenses)
-        # None対策をして日本時間(JST)に変換
-        df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], errors='coerce')
-        df_all["timestamp"] = df_all["timestamp"].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT').dt.tz_convert('Asia/Tokyo')
+        # タイムゾーンの有無に関わらず、安全に日本時間(JST)へ変換
+        timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]]
+        df_all["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
+        if df_all["timestamp"].dt.tz is None:
+            df_all["timestamp"] = df_all["timestamp"].dt.tz_localize('UTC')
+        df_all["timestamp"] = df_all["timestamp"].dt.tz_convert('Asia/Tokyo')
+        
         df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
         for month in sorted(df_all["month"].dropna().unique(), reverse=True):
             df_m = df_all[df_all["month"] == month]
@@ -90,7 +94,7 @@ elif page == "月別集計・リセット🐻":
 # --- [機能4] 管理者設定(削除ページ) ---
 elif page == "管理者設定🍖":
     st.header("🌎管理者設定（完全削除）")
-    st.warning("この操作は取り消せません。両名の同意が必要です。")
+    st.warning("この操作は取り消せるません。両名の同意が必要です。")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     all_expenses = get_data("expenses")
@@ -108,9 +112,13 @@ elif page == "管理者設定🍖":
         st.write("---")
         if all_expenses:
             df_all = pd.DataFrame(all_expenses)
-            # None対策をして日本時間(JST)に変換
-            df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], errors='coerce')
-            df_all["timestamp"] = df_all["timestamp"].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT').dt.tz_convert('Asia/Tokyo')
+            # タイムゾーンの有無に関わらず、安全に日本時間(JST)へ変換
+            timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]]
+            df_all["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
+            if df_all["timestamp"].dt.tz is None:
+                df_all["timestamp"] = df_all["timestamp"].dt.tz_localize('UTC')
+            df_all["timestamp"] = df_all["timestamp"].dt.tz_convert('Asia/Tokyo')
+            
             df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
             target_month = st.selectbox("削除したい年月を選択", sorted(df_all["month"].dropna().unique()))
             if st.button(f"【{target_month}】のデータをすべて削除する"):
@@ -169,9 +177,12 @@ else:
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
         df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
         
-        # None対策をして日本時間(JST)に変換
-        df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], errors='coerce')
-        df["timestamp"] = df["timestamp"].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT').dt.tz_convert('Asia/Tokyo')
+        # タイムゾーンの有無に関わらず、安全に日本時間(JST)へ変換
+        timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]]
+        df["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
+        if df["timestamp"].dt.tz is None:
+            df["timestamp"] = df["timestamp"].dt.tz_localize('UTC')
+        df["timestamp"] = df["timestamp"].dt.tz_convert('Asia/Tokyo')
          
         is_re = df["is_reimburse"]
         d_r = df[(df["person"] == "大地") & (is_re)]["amount"].sum()
