@@ -24,7 +24,7 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
+page = st.sidebar.radio("メニュー🐭🐄🐯🐍🐏🐗🐒", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- [機能1] リスト管理 ---
 if page == "リスト管理🐇":
