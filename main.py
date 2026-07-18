@@ -36,12 +36,12 @@ if page == "リスト管理":
     with st.form("list_form"):
         place = st.text_input("場所", value=st.session_state.last_place)
         item = st.text_input("品目")
-        if st.form_submit_button("登録する"):
+        if st.form_submit_button("登録🐤"):
             if place and item:
                 # 重複チェック
                 cats = get_data("categories")
                 if any(c["place"] == place and c["item"] == item for c in cats):
-                    st.error("その場所と品目の組み合わせは既に登録されています！")
+                    st.error("その場所と品目の組み合わせは既に登録されてるよ🦛")
                 else:
                     db.collection("categories").add({"place": place, "item": item})
                     st.session_state.last_place = place
@@ -49,14 +49,14 @@ if page == "リスト管理":
                     st.rerun()
 
     st.write("---")
-    st.subheader("登録済みのリスト")
+    st.subheader("🐜登録済みリスト💩")
     cats = get_data("categories")
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
         display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        with st.expander("🗑️ リストから削除する"):
+        with st.expander(" リストから削除🐸"):
             options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
             selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
             if st.button("この項目を削除"):
@@ -66,7 +66,7 @@ if page == "リスト管理":
 
 # --- [機能2] 全データ管理 ---
 elif page == "全データ削除":
-    st.header("⚠️ 全データ削除")
+    st.header("🐯 全データ削除")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     
