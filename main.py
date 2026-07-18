@@ -16,7 +16,7 @@ def get_data(collection):
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
 
 # --- ページ設定 ---
-st.set_page_config(page_title="2人だけの家計簿", page_icon="🦈", layout="wide")
+st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="wide")
 
 # --- ユーザー判別 ---
 params = st.query_params
@@ -32,7 +32,7 @@ if page == "リスト管理🐇":
     if "last_place" not in st.session_state: st.session_state.last_place = ""
     with st.form("list_form"):
         place = st.text_input("場所🐡", value=st.session_state.last_place)
-        item = st.text_input("品目🐧")
+        item = st.text_input("品🐧")
         if st.form_submit_button("登録🐤"):
             if place and item:
                 cats = get_data("categories")
@@ -58,7 +58,7 @@ if page == "リスト管理🐇":
 
 # --- [機能2] 月別集計・リセット ---
 elif page == "月別集計・リセット🐻":
-    st.header("🐻月支出・精算リセット")
+    st.header("🐻月支出")
     all_expenses = get_data("expenses")
     if all_expenses:
         df_all = pd.DataFrame(all_expenses)
@@ -140,7 +140,7 @@ elif page == "管理者設定🍖":
 
 # --- [機能3] 家計簿入力 ---
 else:
-    st.markdown("## 🐘 2人だけの家計簿")
+    st.markdown("## 🐘 2人だけの台帳")
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
      
@@ -200,12 +200,12 @@ else:
         c1, c2 = st.columns(2)
         def show(c, u):
             with c:
-                st.subheader(f"{u}の履歴")
+                st.subheader(f"{u}log")
                 udf = df[df["person"]==u].copy()
                 # 日時の表示形式（ゼロ埋めなし形式に変更）
                 udf["日時"] = udf["timestamp"].dt.strftime("%-m/%-d %H:%M").fillna("-")
                 # is_reimburse を 「T」に変更
-                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]].rename(columns={"place": "場所", "item": "品", "amount": "額", "is_reimburse": "T"}), use_container_width=True, hide_index=True)
+                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]].rename(columns={"place": "場所", "item": "品", "amount": "￥", "is_reimburse": "T"}), use_container_width=True, hide_index=True)
                 if u == current_user:
                     with st.expander("🍅 削除"):
                         opts = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in udf.iterrows()}
