@@ -4,6 +4,21 @@ from google.oauth2 import service_account
 import json
 import pandas as pd
 
+# --- CSSでスマホ表示を調整 ---
+st.markdown("""
+    <style>
+    /* カラムをスマホでも横並びにする */
+    [data-testid="column"] {
+        width: calc(50% - 1rem) !important;
+        flex: 1 1 calc(50% - 1rem) !important;
+    }
+    /* 入力欄の余白を詰める */
+    .stTextInput, .stSelectbox {
+        margin-bottom: -10px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- データベース接続 ---
 key_dict = json.loads(st.secrets["textkey"])
 creds = service_account.Credentials.from_service_account_info(key_dict)
