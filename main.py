@@ -130,11 +130,17 @@ else:
     expenses = [e for e in get_data("expenses") if not e.get("is_archived", False)]
     if expenses:
         df = pd.DataFrame(expenses)
-        df["amount"] = pd.to_numeric(df["amount"]).astype(int)
+        df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
+        df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
         df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
         
-        bal = (df[(df["person"]=="大地") & (df["is_reimburse"])]["amount"].sum() + df[(df["person"]=="大地") & (~df["is_reimburse"])]["amount"].sum()/2) - \
-              (df[(df["person"]=="日向子") & (df["is_reimburse"])]["amount"].sum() + df[(df["person"]=="日向子") & (~df["is_reimburse"])]["amount"].sum()/2)
+        is_re = df["is_reimburse"]
+        d_r = df[(df["person"] == "大地") & (is_re)]["amount"].sum()
+        d_s = df[(df["person"] == "大地") & (~is_re)]["amount"].sum()
+        h_r = df[(df["person"] == "日向子") & (is_re)]["amount"].sum()
+        h_s = df[(df["person"] == "日向子") & (~is_re)]["amount"].sum()
+        
+        bal = (d_r + d_s / 2) - (h_r + h_s / 2)
         
         st.subheader("🐢 精算結果")
         if bal > 0: st.warning(f"💗 日向子から大地へ {int(bal):,} 円")
