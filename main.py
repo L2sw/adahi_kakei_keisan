@@ -132,32 +132,30 @@ else:
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
-    # 選択状態の保持
-    if "temp_place" not in st.session_state: st.session_state.temp_place = None
-
     with st.expander("🐔記録する", expanded=True):
-        # 1段目: 場所（選択時にrerunして状態を保存）
-        c1, c2 = st.columns(2)
-        all_places = [""] + sorted(df_cats["place"].unique().tolist())
-        sel_p = c1.selectbox("場所選択", all_places, label_visibility="collapsed", placeholder="場所選択", key="place_sel")
-        txt_p = c2.text_input("場所(直接入力)", label_visibility="collapsed", placeholder="場所(直接入力)")
-        
-        # 場所が確定したらセッション保存
-        if sel_p: st.session_state.temp_place = sel_p
-        place = txt_p if txt_p else st.session_state.temp_place
-        
+        # 状態保持用
+        if "sel_p" not in st.session_state: st.session_state.sel_p = ""
+
         with st.form("input_form", clear_on_submit=True):
-            # 2段目: 品目
-            c3, c4 = st.columns(2)
-            available_items = []
-            if place in df_cats["place"].values:
-                available_items = df_cats[df_cats["place"] == place]["item"].unique().tolist()
+            # 1行目: 場所選択、品目選択
+            c1, c2 = st.columns(2)
+            sel_p = c1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()), 
+                                 label_visibility="collapsed", placeholder="場所選択", key="p_sel")
             
-            sel_i = c3.selectbox("品目選択", [""] + available_items, label_visibility="collapsed", placeholder="品目選択")
+            # 場所が選択されたらフィルタリング
+            available_items = df_cats[df_cats["place"] == sel_p]["item"].unique().tolist() if sel_p else []
+            sel_i = c2.selectbox("品目選択", [""] + available_items, 
+                                 label_visibility="collapsed", placeholder="品目選択")
+            
+            # 2行目: 場所(直接入力)、品目(直接入力)
+            c3, c4 = st.columns(2)
+            txt_p = c3.text_input("場所(直接入力)", label_visibility="collapsed", placeholder="場所(直接入力)")
             txt_i = c4.text_input("品目(直接入力)", label_visibility="collapsed", placeholder="品目(直接入力)")
+            
+            place = txt_p if txt_p else sel_p
             item = txt_i if txt_i else sel_i
             
-            # 3段目: 金額と立替
+            # 3行目: 金額と立替
             c5, c6 = st.columns([2, 1])
             amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d", label_visibility="collapsed", placeholder="金額(円)")
             reimburse = c6.checkbox("全立替")
@@ -165,9 +163,8 @@ else:
             if st.form_submit_button("送信"):
                 if amount and place and item:
                     db.collection("expenses").add({"person": current_user, "place": place, "item": item, "amount": int(amount), "is_reimburse": bool(reimburse), "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False})
-                    st.session_state.temp_place = None
                     st.cache_data.clear(); st.rerun()
-
+    
     expenses = [e for e in get_data("expenses") if not e.get("is_archived", False)]
     if expenses:
         df = pd.DataFrame(expenses)
