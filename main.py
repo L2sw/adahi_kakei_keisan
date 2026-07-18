@@ -29,15 +29,12 @@ page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "
 # --- [機能1] リスト管理 ---
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
-    
-    # 状態管理（場所を保持）
     if "last_place" not in st.session_state:
         st.session_state.last_place = ""
 
     with st.form("list_form"):
-        # 入力された場所をセッションに一時保存
         place = st.text_input("場所", value=st.session_state.last_place)
-        item = st.text_input("品目") # ここは送信後にクリアされる
+        item = st.text_input("品目") 
         if st.form_submit_button("登録する"):
             if place and item:
                 db.collection("categories").add({"place": place, "item": item})
@@ -52,7 +49,6 @@ if page == "リスト管理":
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
         display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
         st.dataframe(display_df, use_container_width=True, hide_index=True)
-        
         with st.expander("🗑️ リストから削除する"):
             options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
             selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
@@ -85,18 +81,15 @@ else:
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
     with st.expander("📝 新しい買い物を記録する", expanded=True):
-        col1, col2 = st.columns(2)
-        
-        # 場所の選択と自由入力
+        # スマホでの操作を考慮し、縦一列に配置
         places = sorted(df_cats["place"].unique().tolist())
-        sel_p = col1.selectbox("場所を選択", [""] + places)
-        text_p = col1.text_input("場所を直接入力(優先)")
+        sel_p = st.selectbox("場所を選択", [""] + places)
+        text_p = st.text_input("場所を直接入力(優先)")
         selected_place = text_p if text_p else sel_p
         
-        # 品目の選択と自由入力
         items = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist() if selected_place in places else []
-        sel_i = col2.selectbox("品目を選択", [""] + items)
-        text_i = col2.text_input("品目を直接入力(優先)")
+        sel_i = st.selectbox("品目を選択", [""] + items)
+        text_i = st.text_input("品目を直接入力(優先)")
         selected_item = text_i if text_i else sel_i
         
         with st.form("input_form", clear_on_submit=True):
@@ -135,24 +128,10 @@ else:
         elif balance < 0: st.warning(f"👉 **大地から日向子へ {int(abs(balance)):,} 円 支払ってください**")
         else: st.success("貸し借りなし！")
         
-        col1, col2 = st.columns(2)
-        def show_history(col, user):
-            with col:
-                st.subheader(f"{user}の履歴")
-                user_df = df[df["person"] == user].copy()
-                user_df["日時"] = user_df["timestamp"].dt.strftime("%m/%d %H:%M")
-                st.dataframe(user_df[["日時", "place", "item", "amount", "is_reimburse"]].rename(
-                    columns={"place":"場所", "item":"内容", "amount":"円", "is_reimburse":"全立替"}), 
-                    use_container_width=True, hide_index=True)
-                
-                if user == current_user:
-                    with st.expander("⚙️ 履歴削除"):
-                        options = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in user_df.iterrows()}
-                        sel = st.selectbox("選択", options.keys())
-                        if st.button("削除", key=f"del_{user}"):
-                            db.collection("expenses").document(options[sel]).delete()
-                            st.cache_data.clear()
-                            st.rerun()
-
-        show_history(col1, "大地")
-        show_history(col2, "日向子")
+        # 履歴表示（スマホで見やすいよう列を削除・調整）
+        st.subheader("履歴")
+        user_df_all = df.copy()
+        user_df_all["日時"] = user_df_all["timestamp"].dt.strftime("%m/%d %H:%M")
+        st.dataframe(user_df_all[["日時", "person", "place", "item", "amount"]].rename(
+            columns={"person": "担当", "place":"場所", "item":"内容", "amount":"円"}), 
+            use_container_width=True, hide_index=True)
