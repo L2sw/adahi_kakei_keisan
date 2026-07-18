@@ -136,19 +136,19 @@ else:
         with st.form("input_form", clear_on_submit=True):
             # 1段目: 場所
             c1, c2 = st.columns(2)
-            sel_p = c1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()))
-            txt_p = c2.text_input("場所(直接入力)")
+            sel_p = c1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()), label_visibility="collapsed", placeholder="場所選択")
+            txt_p = c2.text_input("場所(直接入力)", label_visibility="collapsed", placeholder="場所(直接入力)")
             place = txt_p if txt_p else sel_p
             
             # 2段目: 品目
             c3, c4 = st.columns(2)
-            sel_i = c3.selectbox("品目選択", [""] + (df_cats[df_cats["place"]==place]["item"].unique().tolist() if place in df_cats["place"].values else []))
-            txt_i = c4.text_input("品目(直接入力)")
+            sel_i = c3.selectbox("品目選択", [""] + (df_cats[df_cats["place"]==place]["item"].unique().tolist() if place in df_cats["place"].values else []), label_visibility="collapsed", placeholder="品目選択")
+            txt_i = c4.text_input("品目(直接入力)", label_visibility="collapsed", placeholder="品目(直接入力)")
             item = txt_i if txt_i else sel_i
             
             # 3段目: 金額と立替
             c5, c6 = st.columns([2, 1])
-            amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d")
+            amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d", label_visibility="collapsed", placeholder="金額(円)")
             reimburse = c6.checkbox("全立替")
             
             if st.form_submit_button("送信"):
@@ -182,7 +182,7 @@ else:
                 st.subheader(f"{u}の履歴")
                 udf = df[df["person"]==u].copy()
                 udf["日時"] = udf["timestamp"].dt.strftime("%m/%d %H:%M")
-                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]], use_container_width=True, hide_index=True)
+                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]].rename(columns={"place": "場所", "item": "品", "amount": "額", "is_reimburse": "建替"}), use_container_width=True, hide_index=True)
                 if u == current_user:
                     with st.expander("🍅 削除"):
                         opts = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in udf.iterrows()}
