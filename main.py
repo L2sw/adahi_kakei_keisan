@@ -91,7 +91,14 @@ elif page == "管理者設定🍖":
     st.warning("この操作は取り消せません。両名の同意が必要です。")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
+    
     st.write(f"現在の同意状況: 大地 {'✅' if status.get('daichi') else '❌'} / 日向子 {'✅' if status.get('hinako') else '❌'}")
+    
+    user_key = "daichi" if current_user == "大地" else "hinako"
+    if st.button(f"自分の同意状態を切り替える (現在: {'✅' if status.get(user_key) else '❌'})"):
+        status[user_key] = not status.get(user_key, False)
+        consent_ref.set(status)
+        st.rerun()
     
     confirm = st.checkbox("上記リスクを理解し、削除に同意します")
     if confirm and status.get("daichi") and status.get("hinako"):
