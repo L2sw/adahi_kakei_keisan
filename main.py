@@ -87,7 +87,6 @@ else:
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
     with st.expander("📝 新しい買い物を記録する", expanded=True):
-        # 候補と手入力の競合を防ぐためのロジック
         places = sorted(df_cats["place"].unique().tolist())
         sel_p = st.selectbox("場所を選択", [""] + places)
         text_p = st.text_input("場所を直接入力(優先)")
@@ -114,15 +113,20 @@ else:
     expenses = get_data("expenses")
     if expenses:
         df = pd.DataFrame(expenses)
+        # --- 型変換処理（エラー回避の核心部） ---
+        df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
+        df["is_reimburse"] = df["is_reimburse"].astype(bool)
         df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
         df = df.sort_values("timestamp", ascending=False)
         
-        d_r = df[(df["person"] == "大地") & (df["is_reimburse"])]["amount"].sum()
-        d_s = df[(df["person"] == "大地") & (~df["is_reimburse"])]["amount"].sum()
-        h_r = df[(df["person"] == "日向子") & (df["is_reimburse"])]["amount"].sum()
-        h_s = df[(df["person"] == "日向子") & (~df["is_reimburse"])]["amount"].sum()
+        # --- 精算ロジック ---
+        d_r = df[(df["person"] == "大地") & (df["is_reimburse"] == True)]["amount"].sum()
+        d_s = df[(df["person"] == "大地") & (df["is_reimburse"] == False)]["amount"].sum()
+        h_r = df[(df["person"] == "日向子") & (df["is_reimburse"] == True)]["amount"].sum()
+        h_s = df[(df["person"] == "日向子") & (df["is_reimburse"] == False)]["amount"].sum()
         
         balance = (d_r + d_s/2) - (h_r + h_s/2)
+        
         st.subheader("📊 精算結果")
         if balance > 0: st.warning(f"👉 日向子から大地へ {int(balance):,} 円")
         elif balance < 0: st.warning(f"👉 大地から日向子へ {int(abs(balance)):,} 円")
