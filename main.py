@@ -18,18 +18,6 @@ def get_data(collection):
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの家計簿", page_icon="💰", layout="wide")
 
-# --- 背景カスタマイズ (CSS) ---
-st.markdown("""
-    <style>
-    .stApp {
-        background-color: #fff0f5;
-    }
-    h1, h2, h3 {
-        color: #ff69b4 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 # --- ユーザー判別 ---
 params = st.query_params
 user_code = params.get("user")
@@ -101,7 +89,7 @@ elif page == "全データ管理":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
-    st.markdown("<h2 style='text-align: left;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
