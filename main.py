@@ -66,6 +66,8 @@ if page == "リスト管理🐇":
 # --- [機能2] 月別集計・リセット ---
 elif page == "月別集計・リセット📊":
     st.header("📊 月別集計と精算リセット")
+    
+    # 全データを取得（アーカイブ済みも含む）
     all_expenses = get_data("expenses")
     
     if all_expenses:
@@ -73,18 +75,37 @@ elif page == "月別集計・リセット📊":
         df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], unit='s')
         df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
         
+        # 二人の合計支出を集計
         monthly_total = df_all.groupby("month")["amount"].sum().reset_index()
-        st.subheader("🗓️ 月ごとの支出合計")
+        st.subheader("🗓️ 二人の月間支出合計")
         st.table(monthly_total.rename(columns={"month": "月", "amount": "合計金額(円)"}))
     
     st.write("---")
-    st.subheader("🔄 精算リセット")
-    st.info("リセットすると、現在精算中のデータが全てアーカイブされます。データは消えず、上記月別集計には残ります。")
-    if st.button("現在の買い物をすべて精算完了にする"):
-        for doc in db.collection("expenses").where("is_archived", "==", False).stream():
-            doc.reference.update({"is_archived": True})
-        st.cache_data.clear()
+    st.subheader("🔄 精算リセット（両名の同意が必要）")
+    
+    # 同意ステータス管理
+    consent_ref = db.collection("consent").document("status")
+    status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
+    
+    st.write(f"大地: {'✅ 同意済み' if status.get('daichi') else '❌ 未同意'}")
+    st.write(f"日向子: {'✅ 同意済み' if status.get('hinako') else '❌ 未同意'}")
+    
+    user_key = "daichi" if current_user == "大地" else "hinako"
+    if st.button(f"自分の同意を切り替える (現在: {status.get(user_key, False)})"):
+        status[user_key] = not status.get(user_key, False)
+        consent_ref.set(status)
         st.rerun()
+        
+    if status.get("daichi") and status.get("hinako"):
+        st.warning("両名の同意が確認できました。リセット可能です。")
+        if st.button("現在の買い物をすべて精算完了（アーカイブ）する"):
+            for doc in db.collection("expenses").where("is_archived", "==", False).stream():
+                doc.reference.update({"is_archived": True})
+            consent_ref.set({"daichi": False, "hinako": False})
+            st.cache_data.clear()
+            st.rerun()
+    else:
+        st.info("リセットするには二人とも同意ボタンを押してください。")
 
 # --- [機能3] 家計簿入力 ---
 else:
