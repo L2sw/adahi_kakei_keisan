@@ -9,11 +9,19 @@ key_dict = json.loads(st.secrets["textkey"])
 creds = service_account.Credentials.from_service_account_info(key_dict)
 db = firestore.Client(credentials=creds)
 
-# --- パフォーマンス向上 ---
+# --- パフォーマンス向上 & データ取得 ---
 @st.cache_data(ttl=60)
 def get_data(collection):
     docs = db.collection(collection).stream()
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
+
+# タイムスタンプを安全に日本時間(JST)へ変換する共通関数
+def safe_to_jst(df_series):
+    timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_series]
+    dt_series = pd.to_datetime(timestamps, errors='coerce')
+    if dt_series.dt.tz is None:
+        dt_series = dt_series.dt.tz_localize('UTC')
+    return dt_series.dt.tz_convert('Asia/Tokyo')
 
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの家計簿", page_icon="🦈", layout="wide")
@@ -62,13 +70,8 @@ elif page == "月別集計・リセット🐻":
     all_expenses = get_data("expenses")
     if all_expenses:
         df_all = pd.DataFrame(all_expenses)
-        # タイムゾーンの有無に関わらず、安全に日本時間(JST)へ変換
-        timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]]
-        df_all["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
-        if df_all["timestamp"].dt.tz is None:
-            df_all["timestamp"] = df_all["timestamp"].dt.tz_localize('UTC')
-        df_all["timestamp"] = df_all["timestamp"].dt.tz_convert('Asia/Tokyo')
-        
+        # 日本時間(JST)に安全変換
+        df_all["timestamp"] = safe_to_jst(df_all["timestamp"])
         df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
         for month in sorted(df_all["month"].dropna().unique(), reverse=True):
             df_m = df_all[df_all["month"] == month]
@@ -94,7 +97,7 @@ elif page == "月別集計・リセット🐻":
 # --- [機能4] 管理者設定(削除ページ) ---
 elif page == "管理者設定🍖":
     st.header("🌎管理者設定（完全削除）")
-    st.warning("この操作は取り消せるません。両名の同意が必要です。")
+    st.warning("この操作は取り消せません。両名の同意が必要です。")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     all_expenses = get_data("expenses")
@@ -112,13 +115,8 @@ elif page == "管理者設定🍖":
         st.write("---")
         if all_expenses:
             df_all = pd.DataFrame(all_expenses)
-            # タイムゾーンの有無に関わらず、安全に日本時間(JST)へ変換
-            timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]]
-            df_all["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
-            if df_all["timestamp"].dt.tz is None:
-                df_all["timestamp"] = df_all["timestamp"].dt.tz_localize('UTC')
-            df_all["timestamp"] = df_all["timestamp"].dt.tz_convert('Asia/Tokyo')
-            
+            # 日本時間(JST)に安全変換
+            df_all["timestamp"] = safe_to_jst(df_all["timestamp"])
             df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
             target_month = st.selectbox("削除したい年月を選択", sorted(df_all["month"].dropna().unique()))
             if st.button(f"【{target_month}】のデータをすべて削除する"):
@@ -177,12 +175,8 @@ else:
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
         df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
         
-        # タイムゾーンの有無に関わらず、安全に日本時間(JST)へ変換
-        timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]]
-        df["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
-        if df["timestamp"].dt.tz is None:
-            df["timestamp"] = df["timestamp"].dt.tz_localize('UTC')
-        df["timestamp"] = df["timestamp"].dt.tz_convert('Asia/Tokyo')
+        # 日本時間(JST)に安全変換
+        df["timestamp"] = safe_to_jst(df["timestamp"])
          
         is_re = df["is_reimburse"]
         d_r = df[(df["person"] == "大地") & (is_re)]["amount"].sum()
@@ -202,7 +196,7 @@ else:
             with c:
                 st.subheader(f"{u}の履歴")
                 udf = df[df["person"]==u].copy()
-                # 日時の表示形式（空データはハイフンにする）
+                # 日時の表示形式（万が一空データがあればハイフンにする）
                 udf["日時"] = udf["timestamp"].dt.strftime("%m/%d %H:%M").fillna("-")
                 st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]].rename(columns={"place": "場所", "item": "品", "amount": "額", "is_reimburse": "建替"}), use_container_width=True, hide_index=True)
                 if u == current_user:
