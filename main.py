@@ -62,13 +62,14 @@ elif page == "月別集計・リセット🐻":
     all_expenses = get_data("expenses")
     if all_expenses:
         df_all = pd.DataFrame(all_expenses)
-        df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], unit='s')
+        # 日本時間(JST)に変換
+        df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], utc=True).dt.tz_convert('Asia/Tokyo')
         df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
         for month in sorted(df_all["month"].unique(), reverse=True):
             df_m = df_all[df_all["month"] == month]
             with st.expander(f"{month} (合計: {df_m['amount'].sum():,}円)"):
                 st.dataframe(df_m[["person", "place", "item", "amount"]].rename(columns={"person": "担当", "place": "場所", "item": "品目", "amount": "金額(円)"}), use_container_width=True, hide_index=True)
-    
+     
     st.write("---")
     st.subheader("🐢精算リセット（両名の同意が必要）")
     consent_ref = db.collection("consent").document("status")
@@ -92,21 +93,22 @@ elif page == "管理者設定🍖":
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     all_expenses = get_data("expenses")
-    
+     
     st.write(f"現在の同意状況: 大地 {'✅' if status.get('daichi') else '❌'} / 日向子 {'✅' if status.get('hinako') else '❌'}")
-    
+     
     user_key = "daichi" if current_user == "大地" else "hinako"
     if st.button(f"自分の同意状態を切り替える (現在: {'✅' if status.get(user_key) else '❌'})"):
         status[user_key] = not status.get(user_key, False)
         consent_ref.set(status)
         st.rerun()
-    
+     
     confirm = st.checkbox("上記リスクを理解し、削除に同意します")
     if confirm and status.get("daichi") and status.get("hinako"):
         st.write("---")
         if all_expenses:
             df_all = pd.DataFrame(all_expenses)
-            df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], unit='s')
+            # 日本時間(JST)に変換
+            df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], utc=True).dt.tz_convert('Asia/Tokyo')
             df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
             target_month = st.selectbox("削除したい年月を選択", sorted(df_all["month"].unique()))
             if st.button(f"【{target_month}】のデータをすべて削除する"):
@@ -131,26 +133,26 @@ else:
     st.markdown("## 🐘 2人だけの家計簿")
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
-    
+     
     if "place_sel" not in st.session_state: st.session_state.place_sel = ""
 
     with st.expander("🐔記録する", expanded=True):
         # 順番：場所選択、品目選択、場所(直接)、品目(直接)
         c1, c2 = st.columns(2)
         st.session_state.place_sel = c1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()), 
-                                                 label_visibility="collapsed", placeholder="場所選択🐎")
-        
+                                                   label_visibility="collapsed", placeholder="場所選択🐎")
+         
         available_items = df_cats[df_cats["place"] == st.session_state.place_sel]["item"].unique().tolist() if st.session_state.place_sel else []
         sel_i = c2.selectbox("品目選択", [""] + available_items, label_visibility="collapsed", placeholder="品選択🍳")
-        
+         
         c3, c4 = st.columns(2)
         txt_p = c3.text_input("場所(直接入力)", label_visibility="collapsed", placeholder="場所(直入力)🥄")
         txt_i = c4.text_input("品目(直接入力)", label_visibility="collapsed", placeholder="品(直入力)🥬")
-        
+         
         c5, c6 = st.columns([2, 1])
         amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d", label_visibility="collapsed", placeholder="金額🌲")
         reimburse = c6.checkbox("全立替")
-        
+         
         if st.button("送信"):
             place = txt_p if txt_p else st.session_state.place_sel
             item = txt_i if txt_i else sel_i
@@ -164,21 +166,22 @@ else:
         df = pd.DataFrame(expenses)
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
         df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
-        df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
-        
+        # 日本時間(JST)に変換
+        df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], utc=True).dt.tz_convert('Asia/Tokyo')
+         
         is_re = df["is_reimburse"]
         d_r = df[(df["person"] == "大地") & (is_re)]["amount"].sum()
         d_s = df[(df["person"] == "大地") & (~is_re)]["amount"].sum()
         h_r = df[(df["person"] == "日向子") & (is_re)]["amount"].sum()
         h_s = df[(df["person"] == "日向子") & (~is_re)]["amount"].sum()
-        
+         
         bal = (d_r + d_s / 2) - (h_r + h_s / 2)
-        
+         
         st.subheader("🐢 精算結果")
         if bal > 0: st.warning(f"💗 日向子から大地へ {int(bal):,} 円")
         elif bal < 0: st.warning(f"🐢 大地から日向子へ {int(abs(bal)):,} 円")
         else: st.success("貸し借りなし！")
-        
+         
         c1, c2 = st.columns(2)
         def show(c, u):
             with c:
