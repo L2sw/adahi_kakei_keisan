@@ -9,7 +9,7 @@ key_dict = json.loads(st.secrets["textkey"])
 creds = service_account.Credentials.from_service_account_info(key_dict)
 db = firestore.Client(credentials=creds)
 
-# --- パフォーマンス向上 ---
+# --- パフォーマンス向上: キャッシュを使ってデータ読み込みを効率化 ---
 @st.cache_data(ttl=60)
 def get_data(collection):
     docs = db.collection(collection).stream()
@@ -22,6 +22,7 @@ st.set_page_config(page_title="2人だけの家計簿", page_icon="💰", layout
 params = st.query_params
 user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
+# hなら大地、それ以外なら日向子とする
 current_user = "大地" if user_code == "h" else "日向子"
 
 page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "全データ管理"])
@@ -29,12 +30,10 @@ page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "
 # --- [機能1] リスト管理 ---
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
-    # clear_on_submit=True で登録後に欄をクリア
-    with st.form("list_form", clear_on_submit=True):
-        col1, col2, col3 = st.columns([2, 2, 1])
-        place = col1.text_input("場所")
-        item = col2.text_input("品目")
-        if col3.form_submit_button("登録"):
+    with st.form("list_form"):
+        place = st.text_input("場所")
+        item = st.text_input("品目")
+        if st.form_submit_button("登録する"):
             if place and item:
                 db.collection("categories").add({"place": place, "item": item})
                 st.cache_data.clear()
@@ -45,13 +44,16 @@ if page == "リスト管理":
     cats = get_data("categories")
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
-        # 各行に削除ボタンを配置して誤操作を防止
-        for _, row in df_cats.iterrows():
-            c1, c2, c3 = st.columns([2, 2, 1])
-            c1.write(row['place'])
-            c2.write(row['item'])
-            if c3.button("削除", key=f"del_{row['id']}"):
-                db.collection("categories").document(row['id']).delete()
+        # 表形式で表示
+        display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        
+        # 削除用UI
+        with st.expander("🗑️ リストから削除する"):
+            options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
+            selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
+            if st.button("この項目を削除"):
+                db.collection("categories").document(options[selected_cat]).delete()
                 st.cache_data.clear()
                 st.rerun()
     else:
@@ -59,7 +61,7 @@ if page == "リスト管理":
 
 # --- [機能2] 全データ管理 ---
 elif page == "全データ管理":
-    st.header("⚠️ 全データ削除の管理")
+    st.header("⚠️ 全データ削除")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     
@@ -81,18 +83,24 @@ elif page == "全データ管理":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
+    # 修正前
+# st.title("💰 2人だけの家計簿")
     st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
     
+    cats = get_data("categories")
+    df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
+    
     with st.expander("📝 新しい買い物を記録する", expanded=True):
-        # テキスト入力で自由入力可能に
-        selected_place = st.text_input("場所")
-        selected_item = st.text_input("内容")
+        places = sorted(df_cats["place"].unique().tolist()) if not df_cats.empty else []
+        selected_place = st.selectbox("場所", places)
+        items = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist() if selected_place else []
+        selected_item = st.selectbox("内容", items)
         
         with st.form("input_form", clear_on_submit=True):
             amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d")
             is_reimburse = st.checkbox("全立替")
             if st.form_submit_button("送信する"):
-                if amount is not None and selected_place and selected_item:
+                if amount is not None:
                     db.collection("expenses").add({
                         "person": current_user, "place": selected_place, "item": selected_item,
                         "amount": int(amount), "is_reimburse": bool(is_reimburse), "timestamp": firestore.SERVER_TIMESTAMP
@@ -117,6 +125,7 @@ else:
 
         d_r, d_s = get_totals("大地")
         h_r, h_s = get_totals("日向子")
+        
         balance = (d_r + d_s/2) - (h_r + h_s/2)
         
         st.subheader("📊 精算結果")
