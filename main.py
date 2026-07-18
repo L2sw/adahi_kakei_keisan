@@ -30,7 +30,8 @@ page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "
 # --- [機能1] リスト管理 ---
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
-    with st.form("list_form"):
+    # clear_on_submit=True を設定して登録後にフォームをクリア
+    with st.form("list_form", clear_on_submit=True):
         place = st.text_input("場所")
         item = st.text_input("品目")
         if st.form_submit_button("登録する"):
@@ -83,24 +84,29 @@ elif page == "全データ管理":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
-    # 修正前
-# st.title("💰 2人だけの家計簿")
     st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
     
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
     with st.expander("📝 新しい買い物を記録する", expanded=True):
-        places = sorted(df_cats["place"].unique().tolist()) if not df_cats.empty else []
-        selected_place = st.selectbox("場所", places)
-        items = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist() if selected_place else []
-        selected_item = st.selectbox("内容", items)
+        # 場所と内容をテキスト入力化し、候補をキャプション表示
+        places_list = sorted(df_cats["place"].unique().tolist())
+        selected_place = st.text_input("場所")
+        if places_list:
+            st.caption(f"候補: {', '.join(places_list)}")
+            
+        selected_item = st.text_input("内容")
+        if selected_place:
+            items_list = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist()
+            if items_list:
+                st.caption(f"候補: {', '.join(items_list)}")
         
         with st.form("input_form", clear_on_submit=True):
             amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d")
             is_reimburse = st.checkbox("全立替")
             if st.form_submit_button("送信する"):
-                if amount is not None:
+                if amount is not None and selected_place and selected_item:
                     db.collection("expenses").add({
                         "person": current_user, "place": selected_place, "item": selected_item,
                         "amount": int(amount), "is_reimburse": bool(is_reimburse), "timestamp": firestore.SERVER_TIMESTAMP
