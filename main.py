@@ -24,7 +24,7 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "全データ削除"])
+page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "全データ管理"])
 
 # --- [機能1] リスト管理 ---
 if page == "リスト管理":
@@ -70,7 +70,7 @@ elif page == "全データ管理":
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     
-    # ステータス表示
+    # 同意ステータス表示
     st.write(f"大地: {'✅ 同意済み' if status.get('daichi') else '❌ 未同意'}")
     st.write(f"日向子: {'✅ 同意済み' if status.get('hinako') else '❌ 未同意'}")
     
@@ -93,22 +93,22 @@ else:
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
-    with st.expander("📝 記録する", expanded=True):
+    with st.expander("📝 新しい買い物を記録する", expanded=True):
         col1, col2 = st.columns(2)
         places = sorted(df_cats["place"].unique().tolist())
-        sel_p = col1.selectbox("場所選択", [""] + places)
-        text_p = col1.text_input("場所直接入力(優先)")
+        sel_p = col1.selectbox("場所を選択", [""] + places)
+        text_p = col1.text_input("場所を直接入力(優先)")
         selected_place = text_p if text_p else sel_p
         
         items = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist() if selected_place in places else []
-        sel_i = col2.selectbox("品目選択", [""] + items)
-        text_i = col2.text_input("品目直接入力(優先)")
+        sel_i = col2.selectbox("品目を選択", [""] + items)
+        text_i = col2.text_input("品目を直接入力(優先)")
         selected_item = text_i if text_i else sel_i
         
         with st.form("input_form", clear_on_submit=True):
             amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d")
             is_reimburse = st.checkbox("全立替")
-            if st.form_submit_button("送信"):
+            if st.form_submit_button("送信する"):
                 if amount is not None and selected_place and selected_item:
                     db.collection("expenses").add({
                         "person": current_user, "place": selected_place, "item": selected_item,
@@ -125,6 +125,7 @@ else:
         df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
         df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
         
+        # 精算ロジック
         d_r = df[(df["person"] == "大地") & (df["is_reimburse"])]["amount"].sum()
         d_s = df[(df["person"] == "大地") & (~df["is_reimburse"])]["amount"].sum()
         h_r = df[(df["person"] == "日向子") & (df["is_reimburse"])]["amount"].sum()
