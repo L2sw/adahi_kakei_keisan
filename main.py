@@ -34,8 +34,8 @@ if page == "リスト管理":
         st.session_state.last_place = ""
 
     with st.form("list_form"):
-        place = st.text_input("場所", value=st.session_state.last_place)
-        item = st.text_input("品目")
+        place = st.text_input("場所🐡", value=st.session_state.last_place)
+        item = st.text_input("品目🐧")
         if st.form_submit_button("登録🐤"):
             if place and item:
                 # 重複チェック
