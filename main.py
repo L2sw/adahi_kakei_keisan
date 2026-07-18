@@ -24,11 +24,11 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "全データ管理"])
+page = st.sidebar.radio("メニュー", ["台帳入力", "リスト管理", "全データ削除"])
 
 # --- [機能1] リスト管理 ---
 if page == "リスト管理":
-    st.header("🛒 買い物リスト管理")
+    st.header("🛒 リスト管理")
     
     if "last_place" not in st.session_state:
         st.session_state.last_place = ""
@@ -65,8 +65,8 @@ if page == "リスト管理":
                 st.rerun()
 
 # --- [機能2] 全データ管理 ---
-elif page == "全データ管理":
-    st.header("⚠️ 全データ管理")
+elif page == "全データ削除":
+    st.header("⚠️ 全データ削除")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     
@@ -93,7 +93,7 @@ else:
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
-    with st.expander("📝 新しい買い物を記録する", expanded=True):
+    with st.expander("📝記録する", expanded=True):
         col1, col2 = st.columns(2)
         places = sorted(df_cats["place"].unique().tolist())
         sel_p = col1.selectbox("場所選択", [""] + places)
