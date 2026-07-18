@@ -37,7 +37,7 @@ if page == "リスト管理🐇":
             if place and item:
                 cats = get_data("categories")
                 if any(c["place"] == place and c["item"] == item for c in cats):
-                    st.error("その場所と品目の組み合わせは既に登録されてるよ🦛")
+                    st.error("その場所と品の組み合わせは既に登録されてるよ🦛")
                 else:
                     db.collection("categories").add({"place": place, "item": item})
                     st.session_state.last_place = place
@@ -47,7 +47,7 @@ if page == "リスト管理🐇":
     cats = get_data("categories")
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
-        st.dataframe(df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"}), use_container_width=True, hide_index=True)
+        st.dataframe(df_cats[["place", "item"]].rename(columns={"place": "場所🔋", "item": "品🍦"}), use_container_width=True, hide_index=True)
         with st.expander("🏺リストから削除🐸"):
             options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
             sel = st.selectbox("削除する項目を選択", list(options.keys()))
