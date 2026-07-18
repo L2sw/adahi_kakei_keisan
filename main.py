@@ -145,7 +145,7 @@ else:
             reimburse = st.checkbox("全立替")
             if st.form_submit_button("送信"):
                 if amount and place and item:
-                    db.collection("expenses").add({"person": current_user, "場所": place, "品": item, "額": int(amount), "建替": bool(reimburse), "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False})
+                    db.collection("expenses").add({"person": current_user, "place": place, "item": item, "amount": int(amount), "is_reimburse": bool(reimburse), "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False})
                     st.cache_data.clear(); st.rerun()
     
     expenses = [e for e in get_data("expenses") if not e.get("is_archived", False)]
@@ -174,9 +174,9 @@ else:
                 st.subheader(f"{u}の履歴")
                 udf = df[df["person"]==u].copy()
                 udf["日時"] = udf["timestamp"].dt.strftime("%m/%d %H:%M")
-                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]], use_container_width=True, hide_index=True)
+                st.dataframe(udf[["日時", "場所", "品", "額", "建替"]], use_container_width=True, hide_index=True)
                 if u == current_user:
-                    with st.expander("🍅 削除"):
+                    with st.expander("🍅 削除"): 
                         opts = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in udf.iterrows()}
                         sel = st.selectbox("選択", opts.keys())
                         if st.button("削除", key=f"del_{u}"):
