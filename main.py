@@ -138,7 +138,7 @@ else:
         # 順番：場所選択、品目選択、場所(直接)、品目(直接)
         c1, c2 = st.columns(2)
         st.session_state.place_sel = c1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()), 
-                                                 label_visibility="collapsed", placeholder="場所選択")
+                                                 label_visibility="collapsed", placeholder="場所選択🐎")
         
         available_items = df_cats[df_cats["place"] == st.session_state.place_sel]["item"].unique().tolist() if st.session_state.place_sel else []
         sel_i = c2.selectbox("品目選択", [""] + available_items, label_visibility="collapsed", placeholder="品目選択")
