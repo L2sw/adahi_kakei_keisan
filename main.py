@@ -91,6 +91,7 @@ elif page == "管理者設定🍖":
     st.warning("この操作は取り消せません。両名の同意が必要です。")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
+    all_expenses = get_data("expenses")
     
     st.write(f"現在の同意状況: 大地 {'✅' if status.get('daichi') else '❌'} / 日向子 {'✅' if status.get('hinako') else '❌'}")
     
@@ -102,6 +103,19 @@ elif page == "管理者設定🍖":
     
     confirm = st.checkbox("上記リスクを理解し、削除に同意します")
     if confirm and status.get("daichi") and status.get("hinako"):
+        st.write("---")
+        # 月別削除機能
+        if all_expenses:
+            df_all = pd.DataFrame(all_expenses)
+            df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], unit='s')
+            df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
+            target_month = st.selectbox("削除したい年月を選択", sorted(df_all["month"].unique()))
+            if st.button(f"【{target_month}】のデータをすべて削除する"):
+                for _, row in df_all[df_all["month"] == target_month].iterrows():
+                    db.collection("expenses").document(row["id"]).delete()
+                consent_ref.set({"daichi": False, "hinako": False})
+                st.cache_data.clear(); st.rerun()
+
         if st.button("【全データ】を完全に削除する"):
             for doc in db.collection("expenses").stream(): doc.reference.delete()
             consent_ref.set({"daichi": False, "hinako": False})
