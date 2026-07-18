@@ -28,7 +28,7 @@ page = st.sidebar.radio("メニュー", ["台帳入力", "リスト管理", "全
 
 # --- [機能1] リスト管理 ---
 if page == "リスト管理":
-    st.header("🛒 リスト管理")
+    st.header("🐖 リスト管理")
     
     if "last_place" not in st.session_state:
         st.session_state.last_place = ""
