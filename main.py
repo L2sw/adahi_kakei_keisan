@@ -89,7 +89,7 @@ elif page == "全データ削除":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
-    st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: left; color: #333;'>🐘 2人だけの家計簿</h2>", unsafe_allow_html=True)
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
