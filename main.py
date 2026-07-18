@@ -62,10 +62,11 @@ elif page == "月別集計・リセット🐻":
     all_expenses = get_data("expenses")
     if all_expenses:
         df_all = pd.DataFrame(all_expenses)
-        # 日本時間(JST)に変換
-        df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], utc=True).dt.tz_convert('Asia/Tokyo')
+        # None対策をして日本時間(JST)に変換
+        df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], errors='coerce')
+        df_all["timestamp"] = df_all["timestamp"].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT').dt.tz_convert('Asia/Tokyo')
         df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
-        for month in sorted(df_all["month"].unique(), reverse=True):
+        for month in sorted(df_all["month"].dropna().unique(), reverse=True):
             df_m = df_all[df_all["month"] == month]
             with st.expander(f"{month} (合計: {df_m['amount'].sum():,}円)"):
                 st.dataframe(df_m[["person", "place", "item", "amount"]].rename(columns={"person": "担当", "place": "場所", "item": "品目", "amount": "金額(円)"}), use_container_width=True, hide_index=True)
@@ -107,10 +108,11 @@ elif page == "管理者設定🍖":
         st.write("---")
         if all_expenses:
             df_all = pd.DataFrame(all_expenses)
-            # 日本時間(JST)に変換
-            df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], utc=True).dt.tz_convert('Asia/Tokyo')
+            # None対策をして日本時間(JST)に変換
+            df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], errors='coerce')
+            df_all["timestamp"] = df_all["timestamp"].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT').dt.tz_convert('Asia/Tokyo')
             df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
-            target_month = st.selectbox("削除したい年月を選択", sorted(df_all["month"].unique()))
+            target_month = st.selectbox("削除したい年月を選択", sorted(df_all["month"].dropna().unique()))
             if st.button(f"【{target_month}】のデータをすべて削除する"):
                 for _, row in df_all[df_all["month"] == target_month].iterrows():
                     db.collection("expenses").document(row["id"]).delete()
@@ -166,8 +168,10 @@ else:
         df = pd.DataFrame(expenses)
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
         df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
-        # 日本時間(JST)に変換
-        df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], utc=True).dt.tz_convert('Asia/Tokyo')
+        
+        # None対策をして日本時間(JST)に変換
+        df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], errors='coerce')
+        df["timestamp"] = df["timestamp"].dt.tz_localize('UTC', ambiguous='NaT', nonexistent='NaT').dt.tz_convert('Asia/Tokyo')
          
         is_re = df["is_reimburse"]
         d_r = df[(df["person"] == "大地") & (is_re)]["amount"].sum()
@@ -187,7 +191,8 @@ else:
             with c:
                 st.subheader(f"{u}の履歴")
                 udf = df[df["person"]==u].copy()
-                udf["日時"] = udf["timestamp"].dt.strftime("%m/%d %H:%M")
+                # 日時の表示形式（空データはハイフンにする）
+                udf["日時"] = udf["timestamp"].dt.strftime("%m/%d %H:%M").fillna("-")
                 st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]].rename(columns={"place": "場所", "item": "品", "amount": "額", "is_reimburse": "建替"}), use_container_width=True, hide_index=True)
                 if u == current_user:
                     with st.expander("🍅 削除"):
