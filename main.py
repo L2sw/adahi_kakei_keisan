@@ -63,18 +63,23 @@ if page == "リスト管理":
 
 # --- [機能2] 全データ管理 ---
 elif page == "全データ管理":
-    st.header("⚠️ 全データ削除")
+    st.header("⚠️ 全データ管理")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
-    user_key = "daichi" if current_user == "大地" else "hinako"
     
-    if st.button(f"同意切り替え (現在: {status.get(user_key, False)})"):
+    # 同意状況の表示（修正）
+    st.write("現在の同意状況:")
+    st.write(f"・大地: {'✅' if status.get('daichi', False) else '❌'}")
+    st.write(f"・日向子: {'✅' if status.get('hinako', False) else '❌'}")
+    
+    user_key = "daichi" if current_user == "大地" else "hinako"
+    if st.button(f"自分の同意を切り替える (現在: {status.get(user_key, False)})"):
         status[user_key] = not status.get(user_key, False)
         consent_ref.set(status)
         st.rerun()
     
     if status.get("daichi", False) and status.get("hinako", False):
-        if st.button("全履歴を削除する"):
+        if st.button("⚠️ 本当に全履歴を削除する"):
             for doc in db.collection("expenses").stream(): doc.reference.delete()
             consent_ref.set({"daichi": False, "hinako": False})
             st.cache_data.clear()
@@ -113,7 +118,6 @@ else:
     expenses = get_data("expenses")
     if expenses:
         df = pd.DataFrame(expenses)
-        # --- 型変換処理（エラー回避の核心部） ---
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
         df["is_reimburse"] = df["is_reimburse"].astype(bool)
         df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
@@ -128,24 +132,28 @@ else:
         balance = (d_r + d_s/2) - (h_r + h_s/2)
         
         st.subheader("📊 精算結果")
-        if balance > 0: st.warning(f"👉 日向子から大地へ {int(balance):,} 円")
-        elif balance < 0: st.warning(f"👉 大地から日向子へ {int(abs(balance)):,} 円")
+        if balance > 0: st.warning(f"👉 日向子から大地へ {int(balance):,} 円 支払ってください")
+        elif balance < 0: st.warning(f"👉 大地から日向子へ {int(abs(balance)):,} 円 支払ってください")
         else: st.success("貸し借りなし！")
         
-        st.subheader("履歴")
-        df["日時"] = df["timestamp"].dt.strftime("%m/%d %H:%M")
-        st.dataframe(df[["日時", "person", "place", "item", "amount"]].rename(
-            columns={"person": "担当", "place":"場所", "item":"内容", "amount":"円"}), use_container_width=True, hide_index=True)
+        # --- 履歴表示（修正：全履歴を表示） ---
+        st.subheader("📜 全ての履歴")
+        display_df = df.copy()
+        display_df["日時"] = display_df["timestamp"].dt.strftime("%m/%d %H:%M")
+        st.dataframe(display_df[["日時", "person", "place", "item", "amount"]].rename(
+            columns={"person": "担当", "place":"場所", "item":"内容", "amount":"円"}), 
+            use_container_width=True, hide_index=True)
         
+        # --- 個別削除UI ---
         col1, col2 = st.columns(2)
         for i, col in enumerate([col1, col2]):
             user = ["大地", "日向子"][i]
-            if user == current_user:
-                with col.expander(f"⚙️ {user}の履歴削除"):
+            with col:
+                with st.expander(f"⚙️ {user}の履歴削除"):
                     user_df = df[df["person"] == user]
                     options = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in user_df.iterrows()}
                     sel = st.selectbox("選択", options.keys(), key=f"sel_{user}")
-                    if st.button("削除", key=f"del_{user}"):
+                    if st.button("この履歴を削除", key=f"del_{user}"):
                         db.collection("expenses").document(options[sel]).delete()
                         st.cache_data.clear()
                         st.rerun()
