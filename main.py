@@ -75,15 +75,21 @@ elif page == "月別集計・リセット📊":
         df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], unit='s')
         df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
         
-        # 二人の合計支出を集計
-        monthly_total = df_all.groupby("month")["amount"].sum().reset_index()
-        st.subheader("🗓️ 二人の月間支出合計")
-        st.table(monthly_total.rename(columns={"month": "月", "amount": "合計金額(円)"}))
+        st.subheader("🗓️ 二人の月間支出詳細")
+        months = sorted(df_all["month"].unique(), reverse=True)
+        
+        for month in months:
+            df_month = df_all[df_all["month"] == month]
+            monthly_total = df_month["amount"].sum()
+            with st.expander(f"{month} (合計: {monthly_total:,}円)"):
+                display_df = df_month[["person", "place", "item", "amount"]].rename(
+                    columns={"person": "担当", "place": "場所", "item": "品目", "amount": "金額(円)"}
+                )
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
     
     st.write("---")
     st.subheader("🔄 精算リセット（両名の同意が必要）")
     
-    # 同意ステータス管理
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     
@@ -139,7 +145,6 @@ else:
                     st.rerun()
 
     st.write("---")
-    # アクティブ（is_archived == False）なデータのみ取得
     expenses = [e for e in get_data("expenses") if not e.get("is_archived", False)]
     
     if expenses:
