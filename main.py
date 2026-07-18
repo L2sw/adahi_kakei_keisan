@@ -76,10 +76,10 @@ elif page == "月別集計・リセット🐻":
                 st.dataframe(df_m[["person", "place", "item", "amount"]].rename(columns={"person": "誰", "place": "場所", "item": "品", "amount": "￥"}), use_container_width=True, hide_index=True)
      
     st.write("---")
-    st.subheader("🐢精算リセット（両名の同意が必要）")
+    st.subheader("🐢精算リセット（2人の同意が必要だどん）")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
-    st.write(f"大地: {'✅' if status.get('daichi') else '❌'} | 日向子: {'✅' if status.get('hinako') else '❌'}")
+    st.write(f"大地: {'👼' if status.get('daichi') else '💀'} | 日向子: {'👼' if status.get('hinako') else '💀'}")
     user_key = "daichi" if current_user == "大地" else "hinako"
     if st.button(f"同意切替🐦"):
         status[user_key] = not status.get(user_key, False)
@@ -99,10 +99,10 @@ elif page == "管理者設定🍖":
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     all_expenses = get_data("expenses")
      
-    st.write(f"現在の同意状況: 大地 {'✅' if status.get('daichi') else '❌'} / 日向子 {'✅' if status.get('hinako') else '❌'}")
+    st.write(f"現在の同意状況: 大地 {'👼' if status.get('daichi') else '💀'} / 日向子 {'👼' if status.get('hinako') else '💀'}")
      
     user_key = "daichi" if current_user == "大地" else "hinako"
-    if st.button(f"自分の同意状態を切り替える (現在: {'✅' if status.get(user_key) else '❌'})"):
+    if st.button(f"自分の同意状態を切り替える (現在: {'👼' if status.get(user_key) else '💀'})"):
         status[user_key] = not status.get(user_key, False)
         consent_ref.set(status)
         st.rerun()
