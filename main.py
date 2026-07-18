@@ -27,7 +27,7 @@ current_user = "大地" if user_code == "h" else "日向子"
 page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "全データ削除🐈"])
 
 # --- [機能1] リスト管理 ---
-if page == "リスト管理":
+if page == "リスト管理🐇":
     st.header("🐖 リスト管理")
     
     if "last_place" not in st.session_state:
@@ -65,7 +65,7 @@ if page == "リスト管理":
                 st.rerun()
 
 # --- [機能2] 全データ管理 ---
-elif page == "全データ削除":
+elif page == "全データ削除🐈":
     st.header("🐯 全データ削除")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
