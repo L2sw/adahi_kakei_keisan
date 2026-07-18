@@ -148,7 +148,7 @@ else:
         txt_i = c4.text_input("品目(直接入力)", label_visibility="collapsed", placeholder="品(直入力)🥬")
         
         c5, c6 = st.columns([2, 1])
-        amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d", label_visibility="collapsed", placeholder="金額(円)")
+        amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d", label_visibility="collapsed", placeholder="金額🌲")
         reimburse = c6.checkbox("全立替")
         
         if st.button("送信"):
