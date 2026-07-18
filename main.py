@@ -16,7 +16,7 @@ def get_data(collection):
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
 
 # --- ページ設定 ---
-st.set_page_config(page_title="2人だけの家計簿", page_icon="💰", layout="wide")
+st.set_page_config(page_title="2人だけの家計簿", page_icon="🦈", layout="wide")
 
 # --- ユーザー判別 ---
 params = st.query_params
@@ -93,7 +93,7 @@ else:
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
-    with st.expander("📝記録する", expanded=True):
+    with st.expander("🐔記録する", expanded=True):
         col1, col2 = st.columns(2)
         places = sorted(df_cats["place"].unique().tolist())
         sel_p = col1.selectbox("場所選択", [""] + places)
@@ -133,7 +133,7 @@ else:
         
         balance = (d_r + d_s/2) - (h_r + h_s/2)
         
-        st.subheader("📊 精算結果")
+        st.subheader("🐢 精算結果")
         if balance > 0: st.warning(f"💗 **日向子から大地へ {int(balance):,} 円 支払ってください**")
         elif balance < 0: st.warning(f"🐢 **大地から日向子へ {int(abs(balance)):,} 円 支払ってください**")
         else: st.success("貸し借りなし！")
@@ -149,7 +149,7 @@ else:
                     use_container_width=True, hide_index=True)
                 
                 if user == current_user:
-                    with st.expander("⚙️ 履歴削除"):
+                    with st.expander("🍅 履歴削除"):
                         options = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in user_df.iterrows()}
                         sel = st.selectbox("選択", options.keys())
                         if st.button("削除", key=f"del_{user}"):
