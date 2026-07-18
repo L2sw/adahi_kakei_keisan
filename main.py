@@ -24,7 +24,7 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "全データ削除🐈"])
+page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット📊"])
 
 # --- [機能1] リスト管理 ---
 if page == "リスト管理🐇":
@@ -38,7 +38,6 @@ if page == "リスト管理🐇":
         item = st.text_input("品目🐧")
         if st.form_submit_button("登録🐤"):
             if place and item:
-                # 重複チェック
                 cats = get_data("categories")
                 if any(c["place"] == place and c["item"] == item for c in cats):
                     st.error("その場所と品目の組み合わせは既に登録されてるよ🦛")
@@ -56,7 +55,7 @@ if page == "リスト管理🐇":
         display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        with st.expander(" リストから削除🐸"):
+        with st.expander("🗑️ リストから削除🐸"):
             options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
             selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
             if st.button("この項目を削除"):
@@ -64,30 +63,30 @@ if page == "リスト管理🐇":
                 st.cache_data.clear()
                 st.rerun()
 
-# --- [機能2] 全データ管理 ---
-elif page == "全データ削除🐈":
-    st.header("🐯 全データ削除")
-    consent_ref = db.collection("consent").document("status")
-    status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
+# --- [機能2] 月別集計・リセット ---
+elif page == "月別集計・リセット📊":
+    st.header("📊 月別集計と精算リセット")
+    all_expenses = get_data("expenses")
     
-    # 同意ステータス表示
-    st.write(f"大地: {'✅ 同意済み' if status.get('daichi') else '❌ 未同意'}")
-    st.write(f"日向子: {'✅ 同意済み' if status.get('hinako') else '❌ 未同意'}")
-    
-    user_key = "daichi" if current_user == "大地" else "hinako"
-    if st.button(f"同意を切り替える (現在: {status.get(user_key, False)})"):
-        status[user_key] = not status.get(user_key, False)
-        consent_ref.set(status)
-        st.rerun()
+    if all_expenses:
+        df_all = pd.DataFrame(all_expenses)
+        df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], unit='s')
+        df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
         
-    if status.get("daichi", False) and status.get("hinako", False):
-        if st.button("本当に全ての履歴を削除する"):
-            for doc in db.collection("expenses").stream(): doc.reference.delete()
-            consent_ref.set({"daichi": False, "hinako": False})
-            st.cache_data.clear()
-            st.rerun()
+        monthly_total = df_all.groupby("month")["amount"].sum().reset_index()
+        st.subheader("🗓️ 月ごとの支出合計")
+        st.table(monthly_total.rename(columns={"month": "月", "amount": "合計金額(円)"}))
+    
+    st.write("---")
+    st.subheader("🔄 精算リセット")
+    st.info("リセットすると、現在精算中のデータが全てアーカイブされます。データは消えず、上記月別集計には残ります。")
+    if st.button("現在の買い物をすべて精算完了にする"):
+        for doc in db.collection("expenses").where("is_archived", "==", False).stream():
+            doc.reference.update({"is_archived": True})
+        st.cache_data.clear()
+        st.rerun()
 
-# --- [機能3] 家計簿入力ページ ---
+# --- [機能3] 家計簿入力 ---
 else:
     st.markdown("<h2 style='text-align: left; color: #333;'>🐘 2人だけの家計簿</h2>", unsafe_allow_html=True)
     cats = get_data("categories")
@@ -112,20 +111,22 @@ else:
                 if amount is not None and selected_place and selected_item:
                     db.collection("expenses").add({
                         "person": current_user, "place": selected_place, "item": selected_item,
-                        "amount": int(amount), "is_reimburse": bool(is_reimburse), "timestamp": firestore.SERVER_TIMESTAMP
+                        "amount": int(amount), "is_reimburse": bool(is_reimburse), 
+                        "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False
                     })
                     st.cache_data.clear()
                     st.rerun()
 
     st.write("---")
-    expenses = get_data("expenses")
+    # アクティブ（is_archived == False）なデータのみ取得
+    expenses = [e for e in get_data("expenses") if not e.get("is_archived", False)]
+    
     if expenses:
         df = pd.DataFrame(expenses)
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
         df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
         df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
         
-        # 精算ロジック
         d_r = df[(df["person"] == "大地") & (df["is_reimburse"])]["amount"].sum()
         d_s = df[(df["person"] == "大地") & (~df["is_reimburse"])]["amount"].sum()
         h_r = df[(df["person"] == "日向子") & (df["is_reimburse"])]["amount"].sum()
