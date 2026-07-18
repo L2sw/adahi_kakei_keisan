@@ -24,15 +24,12 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット🐈"])
+page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット📊", "管理者設定⚠️"])
 
 # --- [機能1] リスト管理 ---
 if page == "リスト管理🐇":
     st.header("🐖 リスト管理")
-    
-    if "last_place" not in st.session_state:
-        st.session_state.last_place = ""
-
+    if "last_place" not in st.session_state: st.session_state.last_place = ""
     with st.form("list_form"):
         place = st.text_input("場所🐡", value=st.session_state.last_place)
         item = st.text_input("品目🐧")
@@ -46,143 +43,116 @@ if page == "リスト管理🐇":
                     st.session_state.last_place = place
                     st.cache_data.clear()
                     st.rerun()
-
     st.write("---")
-    st.subheader("🐜登録済みリスト💩")
     cats = get_data("categories")
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
-        display_df = df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"})
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
-        
+        st.dataframe(df_cats[["place", "item"]].rename(columns={"place": "場所", "item": "品目"}), use_container_width=True, hide_index=True)
         with st.expander("🗑️ リストから削除🐸"):
             options = {f"{r['place']} - {r['item']}": r['id'] for _, r in df_cats.iterrows()}
-            selected_cat = st.selectbox("削除する項目を選択", list(options.keys()))
+            sel = st.selectbox("削除する項目を選択", list(options.keys()))
             if st.button("この項目を削除"):
-                db.collection("categories").document(options[selected_cat]).delete()
+                db.collection("categories").document(options[sel]).delete()
                 st.cache_data.clear()
                 st.rerun()
 
 # --- [機能2] 月別集計・リセット ---
-elif page == "月別集計・リセット🐈":
-    st.header("🦌 集計と精算リセット")
-    
-    # 全データを取得（アーカイブ済みも含む）
+elif page == "月別集計・リセット📊":
+    st.header("📊 月別集計と精算リセット")
     all_expenses = get_data("expenses")
-    
     if all_expenses:
         df_all = pd.DataFrame(all_expenses)
         df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], unit='s')
         df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
-        
-        st.subheader("🐔月間支出")
-        months = sorted(df_all["month"].unique(), reverse=True)
-        
-        for month in months:
-            df_month = df_all[df_all["month"] == month]
-            monthly_total = df_month["amount"].sum()
-            with st.expander(f"{month} (合計: {monthly_total:,}円)"):
-                display_df = df_month[["person", "place", "item", "amount"]].rename(
-                    columns={"person": "担当", "place": "場所", "item": "品目", "amount": "金額(円)"}
-                )
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+        for month in sorted(df_all["month"].unique(), reverse=True):
+            df_m = df_all[df_all["month"] == month]
+            with st.expander(f"{month} (合計: {df_m['amount'].sum():,}円)"):
+                st.dataframe(df_m[["person", "place", "item", "amount"]].rename(columns={"person": "担当", "place": "場所", "item": "品目", "amount": "金額(円)"}), use_container_width=True, hide_index=True)
     
     st.write("---")
-    st.subheader("🍮精算リセット（両名の同意が必要）")
-    
+    st.subheader("🔄 精算リセット（両名の同意が必要）")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
-    
-    st.write(f"大地: {'✅ 同意済み' if status.get('daichi') else '❌ 未同意'}")
-    st.write(f"日向子: {'✅ 同意済み' if status.get('hinako') else '❌ 未同意'}")
-    
+    st.write(f"大地: {'✅' if status.get('daichi') else '❌'} | 日向子: {'✅' if status.get('hinako') else '❌'}")
     user_key = "daichi" if current_user == "大地" else "hinako"
-    if st.button(f"自分の同意を切り替える (現在: {status.get(user_key, False)})"):
+    if st.button(f"同意切替: {status.get(user_key, False)}"):
         status[user_key] = not status.get(user_key, False)
         consent_ref.set(status)
         st.rerun()
-        
     if status.get("daichi") and status.get("hinako"):
-        st.warning("両名の同意が確認できました。リセット可能です。")
-        if st.button("現在の買い物をすべて精算完了（アーカイブ）する"):
-            for doc in db.collection("expenses").where("is_archived", "==", False).stream():
-                doc.reference.update({"is_archived": True})
+        if st.button("精算完了(アーカイブ)"):
+            for doc in db.collection("expenses").where("is_archived", "==", False).stream(): doc.reference.update({"is_archived": True})
             consent_ref.set({"daichi": False, "hinako": False})
-            st.cache_data.clear()
-            st.rerun()
+            st.cache_data.clear(); st.rerun()
+
+# --- [機能4] 管理者設定(削除ページ) ---
+elif page == "管理者設定⚠️":
+    st.header("⚠️ 管理者設定（完全削除）")
+    st.warning("この操作は取り消せません。両名の同意が必要です。")
+    consent_ref = db.collection("consent").document("status")
+    status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
+    st.write(f"現在の同意状況: 大地 {'✅' if status.get('daichi') else '❌'} / 日向子 {'✅' if status.get('hinako') else '❌'}")
+    
+    confirm = st.checkbox("上記リスクを理解し、削除に同意します")
+    if confirm and status.get("daichi") and status.get("hinako"):
+        if st.button("【全データ】を完全に削除する"):
+            for doc in db.collection("expenses").stream(): doc.reference.delete()
+            consent_ref.set({"daichi": False, "hinako": False})
+            st.cache_data.clear(); st.rerun()
+        if st.button("【アーカイブ済み期間】のデータを完全に削除する"):
+            for doc in db.collection("expenses").where("is_archived", "==", True).stream(): doc.reference.delete()
+            consent_ref.set({"daichi": False, "hinako": False})
+            st.cache_data.clear(); st.rerun()
     else:
-        st.info("リセットするには二人とも同意ボタンを押してください。")
+        st.info("両名が同意し、チェックボックスをオンにするとボタンが有効になります。")
 
 # --- [機能3] 家計簿入力 ---
 else:
-    st.markdown("<h2 style='text-align: left; color: #333;'>🐘 2人だけの家計簿</h2>", unsafe_allow_html=True)
+    st.markdown("## 🐘 2人だけの家計簿")
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
-    
     with st.expander("🐔記録する", expanded=True):
         col1, col2 = st.columns(2)
-        places = sorted(df_cats["place"].unique().tolist())
-        sel_p = col1.selectbox("場所🐂", [""] + places)
-        text_p = col1.text_input("場所直接入力(優先)")
-        selected_place = text_p if text_p else sel_p
-        
-        items = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist() if selected_place in places else []
-        sel_i = col2.selectbox("品目選択🦑", [""] + items)
-        text_i = col2.text_input("品目直接入力(優先)")
-        selected_item = text_i if text_i else sel_i
-        
+        sel_p = col1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()))
+        txt_p = col1.text_input("場所入力(優先)")
+        place = txt_p if txt_p else sel_p
+        sel_i = col2.selectbox("品目選択", [""] + (df_cats[df_cats["place"]==place]["item"].unique().tolist() if place in df_cats["place"].values else []))
+        txt_i = col2.text_input("品目入力(優先)")
+        item = txt_i if txt_i else sel_i
         with st.form("input_form", clear_on_submit=True):
-            amount = st.number_input("金額🐙", value=None, min_value=0, step=1, format="%d")
-            is_reimburse = st.checkbox("全立替")
-            if st.form_submit_button("送信🦅"):
-                if amount is not None and selected_place and selected_item:
-                    db.collection("expenses").add({
-                        "person": current_user, "place": selected_place, "item": selected_item,
-                        "amount": int(amount), "is_reimburse": bool(is_reimburse), 
-                        "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False
-                    })
-                    st.cache_data.clear()
-                    st.rerun()
-
-    st.write("---")
-    expenses = [e for e in get_data("expenses") if not e.get("is_archived", False)]
+            amount = st.number_input("金額(円)", value=None, min_value=0, step=1, format="%d")
+            reimburse = st.checkbox("全立替")
+            if st.form_submit_button("送信"):
+                if amount and place and item:
+                    db.collection("expenses").add({"person": current_user, "place": place, "item": item, "amount": int(amount), "is_reimburse": bool(reimburse), "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False})
+                    st.cache_data.clear(); st.rerun()
     
+    expenses = [e for e in get_data("expenses") if not e.get("is_archived", False)]
     if expenses:
         df = pd.DataFrame(expenses)
-        df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
-        df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
+        df["amount"] = pd.to_numeric(df["amount"]).astype(int)
         df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
         
-        d_r = df[(df["person"] == "大地") & (df["is_reimburse"])]["amount"].sum()
-        d_s = df[(df["person"] == "大地") & (~df["is_reimburse"])]["amount"].sum()
-        h_r = df[(df["person"] == "日向子") & (df["is_reimburse"])]["amount"].sum()
-        h_s = df[(df["person"] == "日向子") & (~df["is_reimburse"])]["amount"].sum()
-        
-        balance = (d_r + d_s/2) - (h_r + h_s/2)
+        bal = (df[(df["person"]=="大地") & (df["is_reimburse"])]["amount"].sum() + df[(df["person"]=="大地") & (~df["is_reimburse"])]["amount"].sum()/2) - \
+              (df[(df["person"]=="日向子") & (df["is_reimburse"])]["amount"].sum() + df[(df["person"]=="日向子") & (~df["is_reimburse"])]["amount"].sum()/2)
         
         st.subheader("🐢 精算結果")
-        if balance > 0: st.warning(f"💗 **日向子から大地へ {int(balance):,} 円 支払ってください**")
-        elif balance < 0: st.warning(f"🐢 **大地から日向子へ {int(abs(balance)):,} 円 支払ってください**")
+        if bal > 0: st.warning(f"💗 日向子から大地へ {int(bal):,} 円")
+        elif bal < 0: st.warning(f"🐢 大地から日向子へ {int(abs(bal)):,} 円")
         else: st.success("貸し借りなし！")
         
-        col1, col2 = st.columns(2)
-        def show_history(col, user):
-            with col:
-                st.subheader(f"{user}の履歴")
-                user_df = df[df["person"] == user].copy()
-                user_df["日時"] = user_df["timestamp"].dt.strftime("%m/%d %H:%M")
-                st.dataframe(user_df[["日時", "place", "item", "amount", "is_reimburse"]].rename(
-                    columns={"place":"場所", "item":"内容", "amount":"円", "is_reimburse":"全立替"}), 
-                    use_container_width=True, hide_index=True)
-                
-                if user == current_user:
-                    with st.expander("🍅 履歴削除"):
-                        options = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in user_df.iterrows()}
-                        sel = st.selectbox("選択", options.keys())
-                        if st.button("削除", key=f"del_{user}"):
-                            db.collection("expenses").document(options[sel]).delete()
-                            st.cache_data.clear()
-                            st.rerun()
-
-        show_history(col1, "大地")
-        show_history(col2, "日向子")
+        c1, c2 = st.columns(2)
+        def show(c, u):
+            with c:
+                st.subheader(f"{u}の履歴")
+                udf = df[df["person"]==u].copy()
+                udf["日時"] = udf["timestamp"].dt.strftime("%m/%d %H:%M")
+                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]], use_container_width=True, hide_index=True)
+                if u == current_user:
+                    with st.expander("🍅 削除"):
+                        opts = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in udf.iterrows()}
+                        sel = st.selectbox("選択", opts.keys())
+                        if st.button("削除", key=f"del_{u}"):
+                            db.collection("expenses").document(opts[sel]).delete()
+                            st.cache_data.clear(); st.rerun()
+        show(c1, "大地"); show(c2, "日向子")
