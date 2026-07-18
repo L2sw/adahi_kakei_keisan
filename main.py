@@ -145,7 +145,7 @@ else:
             reimburse = st.checkbox("全立替")
             if st.form_submit_button("送信"):
                 if amount and place and item:
-                    db.collection("expenses").add({"person": current_user, "place": place, "item": item, "amount": int(amount), "is_reimburse": bool(reimburse), "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False})
+                    db.collection("expenses").add({"person": current_user, "場所": place, "品": item, "額": int(amount), "建替": bool(reimburse), "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False})
                     st.cache_data.clear(); st.rerun()
     
     expenses = [e for e in get_data("expenses") if not e.get("is_archived", False)]
