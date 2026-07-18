@@ -18,6 +18,18 @@ def get_data(collection):
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの家計簿", page_icon="💰", layout="wide")
 
+# --- 背景カスタマイズ (CSS) ---
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #fff0f5;
+    }
+    h1, h2, h3 {
+        color: #ff69b4 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- ユーザー判別 ---
 params = st.query_params
 user_code = params.get("user")
@@ -30,20 +42,23 @@ page = st.sidebar.radio("メニュー", ["家計簿入力", "リスト管理", "
 if page == "リスト管理":
     st.header("🛒 買い物リスト管理")
     
-    # 状態管理（場所を保持）
     if "last_place" not in st.session_state:
         st.session_state.last_place = ""
 
     with st.form("list_form"):
-        # 入力された場所をセッションに一時保存
         place = st.text_input("場所", value=st.session_state.last_place)
-        item = st.text_input("品目") # ここは送信後にクリアされる
+        item = st.text_input("品目")
         if st.form_submit_button("登録する"):
             if place and item:
-                db.collection("categories").add({"place": place, "item": item})
-                st.session_state.last_place = place
-                st.cache_data.clear()
-                st.rerun()
+                # 重複チェック
+                cats = get_data("categories")
+                if any(c["place"] == place and c["item"] == item for c in cats):
+                    st.error("その場所と品目の組み合わせは既に登録されています！")
+                else:
+                    db.collection("categories").add({"place": place, "item": item})
+                    st.session_state.last_place = place
+                    st.cache_data.clear()
+                    st.rerun()
 
     st.write("---")
     st.subheader("登録済みのリスト")
@@ -63,14 +78,20 @@ if page == "リスト管理":
 
 # --- [機能2] 全データ管理 ---
 elif page == "全データ管理":
-    st.header("⚠️ 全データ削除")
+    st.header("⚠️ 全データ管理")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
+    
+    # ステータス表示
+    st.write(f"大地: {'✅ 同意済み' if status.get('daichi') else '❌ 未同意'}")
+    st.write(f"日向子: {'✅ 同意済み' if status.get('hinako') else '❌ 未同意'}")
+    
     user_key = "daichi" if current_user == "大地" else "hinako"
     if st.button(f"同意を切り替える (現在: {status.get(user_key, False)})"):
         status[user_key] = not status.get(user_key, False)
         consent_ref.set(status)
         st.rerun()
+        
     if status.get("daichi", False) and status.get("hinako", False):
         if st.button("本当に全ての履歴を削除する"):
             for doc in db.collection("expenses").stream(): doc.reference.delete()
@@ -80,20 +101,17 @@ elif page == "全データ管理":
 
 # --- [機能3] 家計簿入力ページ ---
 else:
-    st.markdown("<h2 style='text-align: left; color: #333;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: left;'>💰 2人だけの家計簿</h2>", unsafe_allow_html=True)
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
     
     with st.expander("📝 新しい買い物を記録する", expanded=True):
         col1, col2 = st.columns(2)
-        
-        # 場所の選択と自由入力
         places = sorted(df_cats["place"].unique().tolist())
         sel_p = col1.selectbox("場所を選択", [""] + places)
         text_p = col1.text_input("場所を直接入力(優先)")
         selected_place = text_p if text_p else sel_p
         
-        # 品目の選択と自由入力
         items = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist() if selected_place in places else []
         sel_i = col2.selectbox("品目を選択", [""] + items)
         text_i = col2.text_input("品目を直接入力(優先)")
@@ -119,15 +137,11 @@ else:
         df["is_reimburse"] = df["is_reimburse"].fillna(False).astype(bool)
         df["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df["timestamp"]], unit='s')
         
-        # 精算ロジック
-        def get_totals(user):
-            user_df = df[df["person"] == user]
-            reim = user_df[user_df["is_reimburse"]]["amount"].sum()
-            split = user_df[~user_df["is_reimburse"]]["amount"].sum()
-            return reim, split
-
-        d_r, d_s = get_totals("大地")
-        h_r, h_s = get_totals("日向子")
+        d_r = df[(df["person"] == "大地") & (df["is_reimburse"])]["amount"].sum()
+        d_s = df[(df["person"] == "大地") & (~df["is_reimburse"])]["amount"].sum()
+        h_r = df[(df["person"] == "日向子") & (df["is_reimburse"])]["amount"].sum()
+        h_s = df[(df["person"] == "日向子") & (~df["is_reimburse"])]["amount"].sum()
+        
         balance = (d_r + d_s/2) - (h_r + h_s/2)
         
         st.subheader("📊 精算結果")
