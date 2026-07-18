@@ -24,7 +24,7 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット📊"])
+page = st.sidebar.radio("メニュー", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット🐈"])
 
 # --- [機能1] リスト管理 ---
 if page == "リスト管理🐇":
@@ -64,8 +64,8 @@ if page == "リスト管理🐇":
                 st.rerun()
 
 # --- [機能2] 月別集計・リセット ---
-elif page == "月別集計・リセット📊":
-    st.header("📊 月別集計と精算リセット")
+elif page == "月別集計・リセット🐈":
+    st.header("🦌 集計と精算リセット")
     
     # 全データを取得（アーカイブ済みも含む）
     all_expenses = get_data("expenses")
@@ -75,7 +75,7 @@ elif page == "月別集計・リセット📊":
         df_all["timestamp"] = pd.to_datetime([d.get("timestamp") if isinstance(d, dict) else d for d in df_all["timestamp"]], unit='s')
         df_all["month"] = df_all["timestamp"].dt.strftime("%Y年%m月")
         
-        st.subheader("🗓️ 二人の月間支出詳細")
+        st.subheader("🐔月間支出")
         months = sorted(df_all["month"].unique(), reverse=True)
         
         for month in months:
@@ -88,7 +88,7 @@ elif page == "月別集計・リセット📊":
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
     
     st.write("---")
-    st.subheader("🔄 精算リセット（両名の同意が必要）")
+    st.subheader("🍮精算リセット（両名の同意が必要）")
     
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
@@ -122,19 +122,19 @@ else:
     with st.expander("🐔記録する", expanded=True):
         col1, col2 = st.columns(2)
         places = sorted(df_cats["place"].unique().tolist())
-        sel_p = col1.selectbox("場所選択", [""] + places)
+        sel_p = col1.selectbox("場所🐂", [""] + places)
         text_p = col1.text_input("場所直接入力(優先)")
         selected_place = text_p if text_p else sel_p
         
         items = df_cats[df_cats["place"] == selected_place]["item"].unique().tolist() if selected_place in places else []
-        sel_i = col2.selectbox("品目選択", [""] + items)
+        sel_i = col2.selectbox("品目選択🦑", [""] + items)
         text_i = col2.text_input("品目直接入力(優先)")
         selected_item = text_i if text_i else sel_i
         
         with st.form("input_form", clear_on_submit=True):
-            amount = st.number_input("金額 (円)", value=None, min_value=0, step=1, format="%d")
+            amount = st.number_input("金額🐙", value=None, min_value=0, step=1, format="%d")
             is_reimburse = st.checkbox("全立替")
-            if st.form_submit_button("送信"):
+            if st.form_submit_button("送信🦅"):
                 if amount is not None and selected_place and selected_item:
                     db.collection("expenses").add({
                         "person": current_user, "place": selected_place, "item": selected_item,
