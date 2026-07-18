@@ -200,7 +200,7 @@ else:
         c1, c2 = st.columns(2)
         def show(c, u):
             with c:
-                st.subheader(f"{u}log")
+                st.subheader(f"{u}log🍄")
                 udf = df[df["person"]==u].copy()
                 # 日時の表示形式（ゼロ埋めなし形式に変更）
                 udf["日時"] = udf["timestamp"].dt.strftime("%-m/%-d %H:%M").fillna("-")
