@@ -134,8 +134,8 @@ else:
         balance = (d_r + d_s/2) - (h_r + h_s/2)
         
         st.subheader("📊 精算結果")
-        if balance > 0: st.warning(f"👉 **日向子から大地へ {int(balance):,} 円 支払ってください**")
-        elif balance < 0: st.warning(f"👉 **大地から日向子へ {int(abs(balance)):,} 円 支払ってください**")
+        if balance > 0: st.warning(f"💗 **日向子から大地へ {int(balance):,} 円 支払ってください**")
+        elif balance < 0: st.warning(f"🐢 **大地から日向子へ {int(abs(balance)):,} 円 支払ってください**")
         else: st.success("貸し借りなし！")
         
         col1, col2 = st.columns(2)
