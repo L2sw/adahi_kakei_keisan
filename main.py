@@ -131,7 +131,6 @@ if page == "レシート撮影📷":
                 st.cache_data.clear()
                 st.rerun()
                 
-    st.write("---")
     
     # 保存された画像の取得と一覧表示
     receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
