@@ -157,15 +157,15 @@ if page == "レシート撮影📷":
             st.markdown("### 🐄大地レシート")
             if not df_daichi.empty:
                 for _, r in df_daichi.iterrows():
-                    label = f"🧾 {r['日時']}"
+                    label = f"🐔 {r['日時']}"
                     with st.expander(label):
                         if r["image_url"]:
                             st.image(r["image_url"], use_container_width=True)
-                            if st.button("🗑️ このレシートを削除", key=f"del_{r['id']}"):
+                            if st.button("🐛削除", key=f"del_{r['id']}"):
                                 with st.spinner("削除中...⏳"):
                                     delete_image(r["id"])
                                     db.collection("receipt_images").document(r["id"]).delete()
-                                    st.success("削除しました。")
+                                    st.success("削除したよ")
                                     st.cache_data.clear()
                                     st.rerun()
                         else:
@@ -182,11 +182,11 @@ if page == "レシート撮影📷":
                     with st.expander(label):
                         if r["image_url"]:
                             st.image(r["image_url"], use_container_width=True)
-                            if st.button("🗑️ このレシートを削除", key=f"del_{r['id']}"):
+                            if st.button("🐼削除", key=f"del_{r['id']}"):
                                 with st.spinner("削除中...⏳"):
                                     delete_image(r["id"])
                                     db.collection("receipt_images").document(r["id"]).delete()
-                                    st.success("削除しました。")
+                                    st.success("削除したよ☄")
                                     st.cache_data.clear()
                                     st.rerun()
                         else:
