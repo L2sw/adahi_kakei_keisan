@@ -27,12 +27,15 @@ def get_data(collection):
 
 # --- 画像処理用の関数 ---
 def upload_image(image_file, doc_id):
-    """画像を低圧縮・高解像度でFirebase Storageにアップロードし、URLを返す"""
+    """スマホ純正の超高画質を維持したまま、Firebase Storageにアップロードし、URLを返す"""
     img = Image.open(image_file)
-    img.thumbnail((2048, 2048))
+    
+    # スマホカメラの超高画質をそのまま活かすため、リサイズ上限を3000pxに引き上げ
+    img.thumbnail((3000, 3000))
     
     output = io.BytesIO()
-    img.save(output, format="JPEG", quality=95)
+    # 最高画質品質（quality=98）で圧縮をほぼゼロにして保存
+    img.save(output, format="JPEG", quality=98)
     output.seek(0)
     
     blob = bucket.blob(f"receipts/{doc_id}.jpg")
@@ -71,6 +74,10 @@ st.markdown("""
             margin-bottom: 10px !important;
             padding-bottom: 0px !important;
         }
+        /* アップローダー部分の文字を少し見やすく */
+        [data-testid="stFileUploader"] {
+            margin-bottom: 15px !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -80,21 +87,29 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-# メメニュー設定
+# メニュー設定
 page = st.sidebar.radio("🐭🐄🐯🐍 メニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リreset🐻", "管理者設定🍖"])
 
 # --- [修正ページ] レシート撮影 ---
 if page == "レシート撮影📷":
     st.header("📷 レシート撮影・管理")
-    st.write("ここで撮影したレシートは、下の履歴からいつでも確認・削除ができます。")
+    st.write("「ファイルを選択」を押すとスマホのカメラが起動します。撮影するか、アルバムから選んでください。")
     
-    # 🛠️ 【修正】 エラーの原因だった facing_mode を削除し、標準仕様に戻しました。
-    img_file = st.camera_input("レシートをパシャリ（納得いくまで撮り直しできます）")
+    # 🛠️ 【根本解決】画質が劣化する st.camera_input を廃止し、
+    # スマホ純正カメラを最高画質・外カメラで起動できるファイルアップローダーに変更
+    img_file = st.file_uploader(
+        "ここをタップしてレシートを撮影 📸", 
+        type=["jpg", "jpeg", "png"],
+        label_visibility="collapsed"
+    )
     
     if img_file is not None:
-        st.success("写真が準備できました！保存する場合は下のボタンを押してください。")
+        # アップロードされた画像のプレビュー表示（正しく読み込めているか確認用）
+        st.image(img_file, caption="選択されたレシート", use_container_width=True)
+        st.success("写真の準備ができました！保存する場合は下のボタンを押してください。")
+        
         if st.button("このレシート画像を保存する💾", use_container_width=True):
-            with st.spinner("画像をアップロード中...⏳"):
+            with st.spinner("最高画質で画像をアップロード中...⏳"):
                 doc_ref = db.collection("receipt_images").add({
                     "person": current_user,
                     "timestamp": firestore.SERVER_TIMESTAMP,
@@ -225,7 +240,7 @@ elif page == "月別集計・リreset🐻":
                 st.dataframe(df_m[["person", "place", "item", "amount"]].rename(columns={"person": "誰", "place": "場所", "item": "品", "amount": "￥"}), use_container_width=True, hide_index=True)
      
     st.write("---")
-    st.subheader("🐢精算リセット（2人の同意が必要だどん）")
+    st.subheader("🐢精算リreset（2人の同意が必要だどん）")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     st.write(f"大地: {'👼' if status.get('daichi') else '💀'} | 日向子: {'👼' if status.get('hinako') else '💀'}")
