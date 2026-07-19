@@ -130,8 +130,6 @@ if page == "レシート撮影📷":
                 
                 st.cache_data.clear()
                 st.rerun()
-                
-    st.write("---")
     
     # 🛠️ 【新機能】ログイン中のユーザーに応じた「自分のレシート全削除機能」
     st.subheader(f"🥎レシート一括削除")
@@ -156,8 +154,6 @@ if page == "レシート撮影📷":
                 st.info("削除するレシートがありませんでした。")
             st.cache_data.clear()
             st.rerun()
-
-    st.write("---")
 
     # 保存された画像の取得と一覧表示
     receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
@@ -240,7 +236,6 @@ elif page == "リスト管理🐇":
                     st.session_state.last_place = place
                     st.cache_data.clear()
                     st.rerun()
-    st.write("---")
     cats = get_data("categories")
     if cats:
         df_cats = pd.DataFrame(cats).sort_values(by=["place", "item"])
