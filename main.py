@@ -135,10 +135,10 @@ if page == "レシート撮影📷":
     
     # 🛠️ 【新機能】ログイン中のユーザーに応じた「自分のレシート全削除機能」
     st.subheader(f"⚠️ 自分のレシートを一括削除")
-    st.write(f"現在、**【{current_user}】**としてログインしています。自分が撮影したレシートのみをすべて削除できます。")
+    st.write(f"自分が撮影したレシートのみをすべて削除できるよ🦎")
     
-    confirm_all_del = st.checkbox(f"本当に【{current_user}】のレシート履歴・画像をすべて完全に削除しますか？")
-    if st.button(f"🚨 {current_user}のレシートをすべて削除する", use_container_width=True, disabled=not confirm_all_del):
+    confirm_all_del = st.checkbox(f"🚙本当に【{current_user}】のレシートを全削除する？🌰")
+    if st.button(f"🚨 {current_user}のを全削除する", use_container_width=True, disabled=not confirm_all_del):
         with st.spinner(f"{current_user}のデータを一括削除中...⏳"):
             # ログイン中のユーザーのレシートのみを取得
             my_receipts = db.collection("receipt_images").where("person", "==", current_user).stream()
