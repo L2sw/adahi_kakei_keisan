@@ -1,11 +1,11 @@
-import streamlit as pd
 import streamlit as st
 from google.cloud import firestore
 from google.cloud import storage
 from google.oauth2 import service_account
 import json
 import pandas as pd
-from PIL import Image
+# ★ 自動回転補正のために ImageOps を追加
+from PIL import Image, ImageOps
 import io
 from datetime import timedelta
 
@@ -27,8 +27,11 @@ def get_data(collection):
 
 # --- 画像処理用の関数 ---
 def upload_image(image_file, doc_id):
-    """スマホ純正の超高画質を維持したまま、Firebase Storageにアップロードし、URLを返す"""
+    """スマホ純正の超高画質を維持し、かつ縦横の回転を正しく補正してFirebaseに保存する"""
     img = Image.open(image_file)
+    
+    # 🛠️ 【向きの修正】スマホ特有の回転情報（EXIF）を解析し、撮影した通りの向き（縦向きなど）に自動補正
+    img = ImageOps.exif_transpose(img)
     
     # スマホカメラの超高画質をそのまま活かすため、リサイズ上限を3000pxに引き上げ
     img.thumbnail((3000, 3000))
@@ -87,16 +90,14 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-# メニュー設定
+# メメニュー設定
 page = st.sidebar.radio("🐭🐄🐯🐍 メニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リreset🐻", "管理者設定🍖"])
 
-# --- [修正ページ] レシート撮影 ---
+# --- レシート撮影ページ ---
 if page == "レシート撮影📷":
     st.header("📷 レシート撮影・管理")
     st.write("「ファイルを選択」を押すとスマホのカメラが起動します。撮影するか、アルバムから選んでください。")
     
-    # 🛠️ 【根本解決】画質が劣化する st.camera_input を廃止し、
-    # スマホ純正カメラを最高画質・外カメラで起動できるファイルアップローダーに変更
     img_file = st.file_uploader(
         "ここをタップしてレシートを撮影 📸", 
         type=["jpg", "jpeg", "png"],
@@ -104,12 +105,15 @@ if page == "レシート撮影📷":
     )
     
     if img_file is not None:
-        # アップロードされた画像のプレビュー表示（正しく読み込めているか確認用）
-        st.image(img_file, caption="選択されたレシート", use_container_width=True)
+        # プレビュー表示時も、撮影した通りの正しい向きで表示させる
+        preview_img = Image.open(img_file)
+        preview_img = ImageOps.exif_transpose(preview_img)
+        
+        st.image(preview_img, caption="選択されたレシート", use_container_width=True)
         st.success("写真の準備ができました！保存する場合は下のボタンを押してください。")
         
         if st.button("このレシート画像を保存する💾", use_container_width=True):
-            with st.spinner("最高画質で画像をアップロード中...⏳"):
+            with st.spinner("正しい向きに補正してアップロード中...⏳"):
                 doc_ref = db.collection("receipt_images").add({
                     "person": current_user,
                     "timestamp": firestore.SERVER_TIMESTAMP,
@@ -191,7 +195,7 @@ if page == "レシート撮影📷":
     else:
         st.info("まだ保存されたレシートはありません。")
 
-# --- [機能1] リスト管理 ---
+# --- リスト管理 ---
 elif page == "リスト管理🐇":
     st.header("🐖 リスト管理")
     if "last_place" not in st.session_state: st.session_state.last_place = ""
@@ -221,7 +225,7 @@ elif page == "リスト管理🐇":
                 st.cache_data.clear()
                 st.rerun()
 
-# --- [機能2] 月別集計・リreset ---
+# --- 月別集計・リreset ---
 elif page == "月別集計・リreset🐻":
     st.header("🐻月支出")
     all_expenses = get_data("expenses")
@@ -255,7 +259,7 @@ elif page == "月別集計・リreset🐻":
             consent_ref.set({"daichi": False, "hinako": False})
             st.cache_data.clear(); st.rerun()
 
-# --- [機能4] 管理者設定(削除ページ) ---
+# --- 管理者設定(削除ページ) ---
 elif page == "管理者設定🍖":
     st.header("🌎管理者設定（完全削除）")
     st.warning("この操作は取り消せません。両名の同意が必要です。")
@@ -301,7 +305,7 @@ elif page == "管理者設定🍖":
     else:
         st.info("両名が同意し、チェックボックスをオンにするとボタンが有効になります。")
 
-# --- [機能3] 家計簿入力 (台帳入力) ---
+# --- 家計簿入力 (台帳入力) ---
 else:
     st.markdown("## 🐘 2人だけの台帳")
     cats = get_data("categories")
