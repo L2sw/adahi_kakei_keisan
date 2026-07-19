@@ -27,18 +27,21 @@ def get_data(collection):
 
 # --- 画像処理用の関数 ---
 def upload_image(image_file, doc_id):
-    """画像を圧縮してFirebase Storageにアップロードし、URLを返す"""
+    """画像を低圧縮・高解像度でFirebase Storageにアップロードし、URLを返す"""
     img = Image.open(image_file)
-    img.thumbnail((1024, 1024))  # 容量節約のため最大1024pxにリサイズ
+    
+    # 改善：最大サイズを2048pxに引き上げ（文字をくっきりさせる）
+    img.thumbnail((2048, 2048))
     
     output = io.BytesIO()
-    img.save(output, format="JPEG", quality=80)
+    # 改善：画質（quality）を95に引き上げて画像の粗さを解消
+    img.save(output, format="JPEG", quality=95)
     output.seek(0)
     
     blob = bucket.blob(f"receipts/{doc_id}.jpg")
     blob.upload_from_file(output, content_type="image/jpeg")
     
-    # 署名付きURLの有効期限をtimedeltaで正しく7日間に設定（Firebaseの最大値）
+    # 署名付きURLの有効期限をtimedeltaで正しく7日間に設定
     return blob.generate_signed_url(version="v4", expiration=timedelta(days=7), method="GET")
 
 def delete_image(doc_id):
@@ -59,20 +62,17 @@ current_user = "大地" if user_code == "h" else "日向子"
 # メニュー設定
 page = st.sidebar.radio("🐭🐄🐯🐍 メニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
 
-# --- [新規ページ] レシート撮影 ---
+# --- [修正ページ] レシート撮影 ---
 if page == "レシート撮影📷":
     st.header("📷 レシート撮影・管理")
     st.write("ここで撮影したレシートは、下の履歴からいつでも確認・削除ができます。")
     
-    # 修正: エラーを回避しつつ背面カメラを優先するために「"user"（インカメ）以外の指定」として認識させます
-    # 環境によって動かない可能性を考慮し、最も標準的な設定に変更しました。
     img_file = st.camera_input("レシートをパシャリ（納得いくまで撮り直しできます）")
     
     if img_file is not None:
         st.success("写真が準備できました！保存する場合は下のボタンを押してください。")
         if st.button("このレシート画像を保存する💾", use_container_width=True):
             with st.spinner("画像をアップロード中...⏳"):
-                # データベースに画像管理用の専用レコードを作成
                 doc_ref = db.collection("receipt_images").add({
                     "person": current_user,
                     "timestamp": firestore.SERVER_TIMESTAMP,
@@ -80,7 +80,6 @@ if page == "レシート撮影📷":
                 })
                 doc_id = doc_ref[1].id
                 
-                # 画像をストレージに保存してURLを更新
                 image_url = upload_image(img_file, doc_id)
                 doc_ref[1].update({"image_url": image_url})
                 
@@ -91,7 +90,7 @@ if page == "レシート撮影📷":
     st.write("---")
     st.subheader("🗂️ 保存されたレシート履歴")
     
-    # 2. 保存された画像の取得と一覧表示
+    # 保存された画像の取得と一覧表示
     receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
     receipts = [{"id": doc.id, **doc.to_dict()} for doc in receipt_docs]
     
@@ -106,34 +105,60 @@ if page == "レシート撮影📷":
         df_receipts["timestamp"] = df_receipts["timestamp"].dt.tz_convert('Asia/Tokyo')
         df_receipts["日時"] = df_receipts["timestamp"].dt.strftime("%Y/%m/%d %H:%M").fillna("-")
         
-        # 閲覧・削除用の選択肢を作成
-        img_opts = {}
-        for _, r in df_receipts.iterrows():
-            label = f"{r['日時']} ({r['person']}が撮影)"
-            img_opts[label] = {"id": r["id"], "url": r["image_url"]}
-            
-        sel_label = st.selectbox("確認・削除したいレシートを選択してください", list(img_opts.keys()))
+        # 改善：大地と日向子でデータを分離
+        df_daichi = df_receipts[df_receipts["person"] == "大地"]
+        df_hinako = df_receipts[df_receipts["person"] == "日向子"]
         
-        if sel_label:
-            selected_data = img_opts[sel_label]
-            
-            # 画像の表示
-            if selected_data["url"]:
-                st.image(selected_data["url"], caption=sel_label, use_container_width=True)
+        # 画面を2列に分けて左右にそれぞれの履歴を表示
+        col_d, col_h = st.columns(2)
+        
+        # --- 大地の画像履歴 ---
+        with col_d:
+            st.markdown("### 🧔 大地が撮ったレシート")
+            if not df_daichi.empty:
+                for _, r in df_daichi.iterrows():
+                    label = f"🧾 {r['日時']}"
+                    # 改善：プルダウンではなく、タップすると下に開くアコーディオン形式
+                    with st.expander(label):
+                        if r["image_url"]:
+                            st.image(r["image_url"], use_container_width=True)
+                            
+                            # 各写真の中に削除ボタンを配置
+                            if st.button("🗑️ このレシートを削除", key=f"del_{r['id']}"):
+                                with st.spinner("削除中...⏳"):
+                                    delete_image(r["id"])
+                                    db.collection("receipt_images").document(r["id"]).delete()
+                                    st.success("削除しました。")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                        else:
+                            st.info("画像URLがありません。")
             else:
-                st.info("画像の処理中、またはURLがありません。")
+                st.info("大地のレシート履歴はありません。")
                 
-            # 不要な場合の削除機能
-            st.write("---")
-            with st.expander("🗑️ このレシートを削除する"):
-                st.warning("この操作を行うと、画像データは完全に消去されます。")
-                if st.button("完全に削除する", key="del_receipt_btn"):
-                    with st.spinner("削除中...⏳"):
-                        delete_image(selected_data["id"])  # Storageから削除
-                        db.collection("receipt_images").document(selected_data["id"]).delete()  # Firestoreから削除
-                        st.success("削除しました。")
-                        st.cache_data.clear()
-                        st.rerun()
+        # --- 日向子の画像履歴 ---
+        with col_h:
+            st.markdown("### 👩 日向子が撮ったレシート")
+            if not df_hinako.empty:
+                for _, r in df_hinako.iterrows():
+                    label = f"🧾 {r['日時']}"
+                    # 改善：プルダウンではなく、タップすると下に開くアコーディオン形式
+                    with st.expander(label):
+                        if r["image_url"]:
+                            st.image(r["image_url"], use_container_width=True)
+                            
+                            # 各写真の中に削除ボタンを配置
+                            if st.button("🗑️ このレシートを削除", key=f"del_{r['id']}"):
+                                with st.spinner("削除中...⏳"):
+                                    delete_image(r["id"])
+                                    db.collection("receipt_images").document(r["id"]).delete()
+                                    st.success("削除しました。")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                        else:
+                            st.info("画像URLがありません。")
+            else:
+                st.info("日向子のレシート履歴はありません。")
     else:
         st.info("まだ保存されたレシートはありません。")
 
