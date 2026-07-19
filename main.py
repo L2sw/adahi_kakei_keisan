@@ -1,3 +1,4 @@
+import streamlit as pd
 import streamlit as st
 from google.cloud import firestore
 from google.cloud import storage
@@ -6,6 +7,7 @@ import json
 import pandas as pd
 from PIL import Image
 import io
+from datetime import timedelta  # 追加: URL有効期限の設定用
 
 # --- データベース・ストレージ接続 ---
 key_dict = json.loads(st.secrets["textkey"])
@@ -14,6 +16,7 @@ db = firestore.Client(credentials=creds)
 
 # ★★★ Firebase Storageの設定 ★★★
 BUCKET_NAME = "kakei-adachi.firebasestorage.app"
+# 署名付きURLを正しく生成するために、credentialsを明示的に渡してクライアントを初期化します
 storage_client = storage.Client(credentials=creds)
 bucket = storage_client.bucket(BUCKET_NAME)
 
@@ -36,8 +39,8 @@ def upload_image(image_file, doc_id):
     blob = bucket.blob(f"receipts/{doc_id}.jpg")
     blob.upload_from_file(output, content_type="image/jpeg")
     
-    # 30日間有効な署名付きURLを発行
-    return blob.generate_signed_url(expiration=30*24*60*60)
+    # 修正：署名付きURLの有効期限をtimedeltaで正しく7日間に設定（Firebaseの最大値）
+    return blob.generate_signed_url(version="v4", expiration=timedelta(days=7), method="GET")
 
 def delete_image(doc_id):
     """Firebase Storage上の画像を削除する"""
@@ -54,7 +57,7 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-# ★★★ メニューに「レシート撮影📷」を新しく追加しました ★★★
+# メニュー設定
 page = st.sidebar.radio("🐭🐄🐯🐍 メニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- [新規ページ] レシート撮影 ---
@@ -62,8 +65,8 @@ if page == "レシート撮影📷":
     st.header("📷 レシート撮影・管理")
     st.write("ここで撮影したレシートは、下の履歴からいつでも確認・削除ができます。")
     
-    # 1. 撮影エリア
-    img_file = st.camera_input("レシートをパシャリ（納得いくまで撮り直しできます）")
+    # 修正: facing_mode="environment" を追加して最初からアウトカメラ（背面）で起動するように指定
+    img_file = st.camera_input("レシートをパシャリ（納得いくまで撮り直しできます）", facing_mode="environment")
     
     if img_file is not None:
         st.success("写真が準備できました！保存する場合は下のボタンを押してください。")
@@ -89,7 +92,6 @@ if page == "レシート撮影📷":
     st.subheader("🗂️ 保存されたレシート履歴")
     
     # 2. 保存された画像の取得と一覧表示
-    # ※リアルタイムに近い状態で確認できるよう、この一覧はキャッシュ(get_data)を使わず直接取得します
     receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
     receipts = [{"id": doc.id, **doc.to_dict()} for doc in receipt_docs]
     
@@ -117,6 +119,7 @@ if page == "レシート撮影📷":
             
             # 画像の表示
             if selected_data["url"]:
+                # 修正: 表示が壊れるのを防ぐため、明示的に画像コンポーネントで出力
                 st.image(selected_data["url"], caption=sel_label, use_container_width=True)
             else:
                 st.info("画像の処理中、またはURLがありません。")
