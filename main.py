@@ -4,7 +4,6 @@ from google.cloud import storage
 from google.oauth2 import service_account
 import json
 import pandas as pd
-# ★ 自動回転補正のために ImageOps を追加
 from PIL import Image, ImageOps
 import io
 from datetime import timedelta
@@ -30,7 +29,7 @@ def upload_image(image_file, doc_id):
     """スマホ純正の超高画質を維持し、かつ縦横の回転を正しく補正してFirebaseに保存する"""
     img = Image.open(image_file)
     
-    # 🛠️ 【向きの修正】スマホ特有の回転情報（EXIF）を解析し、撮影した通りの向き（縦向きなど）に自動補正
+    # スマホ特有の回転情報（EXIF）を解析し、撮影した通りの向きに自動補正
     img = ImageOps.exif_transpose(img)
     
     # スマホカメラの超高画質をそのまま活かすため、リサイズ上限を3000pxに引き上げ
@@ -58,26 +57,21 @@ st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="w
 # 表示の間隔をギリギリまで詰めるためのカスタムCSS
 st.markdown("""
     <style>
-        /* アコーディオン（expander）の外枠と上下の余白を最小化 */
         [data-testid="stExpander"] {
             margin-bottom: 4px !important;
             padding-bottom: 0px !important;
         }
-        /* アコーディオンの中の余白を詰める */
         [data-testid="stExpanderDetails"] {
             padding: 8px 12px !important;
         }
-        /* 各要素の上下の隙間を詰める */
         .element-container {
             margin-bottom: 6px !important;
         }
-        /* 見出し周りの余白も少しタイトに */
         h3 {
             margin-top: 10px !important;
             margin-bottom: 10px !important;
             padding-bottom: 0px !important;
         }
-        /* アップローダー部分の文字を少し見やすく */
         [data-testid="stFileUploader"] {
             margin-bottom: 15px !important;
         }
@@ -90,18 +84,23 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-# メメニュー設定
-page = st.sidebar.radio("🐭🐄🐯🐍 メニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リreset🐻", "管理者設定🍖"])
+# メニュー設定
+page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リreset🐻", "管理者設定🍖"])
 
 # --- レシート撮影ページ ---
 if page == "レシート撮影📷":
     st.header("📷 レシート撮影・管理")
     st.write("「ファイルを選択」を押すとスマホのカメラが起動します。撮影するか、アルバムから選んでください。")
     
+    # 🛠️ 連続撮影対応のための仕掛け：動的な一意のキー、またはセッションステートで制御するために key を指定
+    if "uploader_key" not in st.session_state:
+        st.session_state.uploader_key = 0
+
     img_file = st.file_uploader(
         "ここをタップしてレシートを撮影 📸", 
         type=["jpg", "jpeg", "png"],
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        key=f"receipt_uploader_{st.session_state.uploader_key}"  # 保存後にこのキーを変えることで完全にクリアします
     )
     
     if img_file is not None:
@@ -125,6 +124,11 @@ if page == "レシート撮影📷":
                 doc_ref[1].update({"image_url": image_url})
                 
                 st.success("保存が完了しました！")
+                
+                # 🛠️ 【クリア処理】アップローダーのキーをインクリメント（変更）することで、
+                # 選択されていたファイルやプレビュー表示を完全に消去し、初期状態に戻します。
+                st.session_state.uploader_key += 1
+                
                 st.cache_data.clear()
                 st.rerun()
                 
