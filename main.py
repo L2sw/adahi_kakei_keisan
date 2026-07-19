@@ -29,19 +29,15 @@ def get_data(collection):
 def upload_image(image_file, doc_id):
     """画像を低圧縮・高解像度でFirebase Storageにアップロードし、URLを返す"""
     img = Image.open(image_file)
-    
-    # 改善：最大サイズを2048pxに引き上げ（文字をくっきりさせる）
     img.thumbnail((2048, 2048))
     
     output = io.BytesIO()
-    # 改善：画質（quality）を95に引き上げて画像の粗さを解消
     img.save(output, format="JPEG", quality=95)
     output.seek(0)
     
     blob = bucket.blob(f"receipts/{doc_id}.jpg")
     blob.upload_from_file(output, content_type="image/jpeg")
     
-    # 署名付きURLの有効期限をtimedeltaで正しく7日間に設定
     return blob.generate_signed_url(version="v4", expiration=timedelta(days=7), method="GET")
 
 def delete_image(doc_id):
@@ -53,6 +49,31 @@ def delete_image(doc_id):
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="wide")
 
+# 💡 【追加】 表示の間隔をギリギリまで詰めるためのカスタムCSS
+st.markdown("""
+    <style>
+        /* アコーディオン（expander）の外枠と上下の余白を最小化 */
+        [data-testid="stExpander"] {
+            margin-bottom: 4px !important;
+            padding-bottom: 0px !important;
+        }
+        /* アコーディオンの中の余白を詰める */
+        [data-testid="stExpanderDetails"] {
+            padding: 8px 12px !important;
+        }
+        /* 各要素の上下の隙間を詰める */
+        .element-container {
+            margin-bottom: 6px !important;
+        }
+        /* 見出し周りの余白も少しタイトに */
+        h3 {
+            margin-top: 10px !important;
+            margin-bottom: 10px !important;
+            padding-bottom: 0px !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- ユーザー判別 ---
 params = st.query_params
 user_code = params.get("user")
@@ -60,14 +81,16 @@ if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
 # メニュー設定
-page = st.sidebar.radio("🐭🐄🐯🐍 メニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
+page = st.sidebar.radio("🐭🐄🐯🐍 メニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リreset🐻", "管理者設定🍖"])
 
 # --- [修正ページ] レシート撮影 ---
 if page == "レシート撮影📷":
     st.header("📷 レシート撮影・管理")
     st.write("ここで撮影したレシートは、下の履歴からいつでも確認・削除ができます。")
     
-    img_file = st.camera_input("レシートをパシャリ（納得いくまで撮り直しできます）")
+    # 💡 【修正】 外カメラ（背面カメラ）をデフォルトにする正しい指定
+    # Streamlitの公式仕様に基づき、大文字の "ENVIRONMENT" で指定することでエラーを回避しつつ外カメラで起動させます
+    img_file = st.camera_input("レシートをパシャリ（納得いくまで撮り直しできます）", facing_mode="ENVIRONMENT")
     
     if img_file is not None:
         st.success("写真が準備できました！保存する場合は下のボタンを押してください。")
@@ -105,11 +128,9 @@ if page == "レシート撮影📷":
         df_receipts["timestamp"] = df_receipts["timestamp"].dt.tz_convert('Asia/Tokyo')
         df_receipts["日時"] = df_receipts["timestamp"].dt.strftime("%Y/%m/%d %H:%M").fillna("-")
         
-        # 改善：大地と日向子でデータを分離
         df_daichi = df_receipts[df_receipts["person"] == "大地"]
         df_hinako = df_receipts[df_receipts["person"] == "日向子"]
         
-        # 画面を2列に分けて左右にそれぞれの履歴を表示
         col_d, col_h = st.columns(2)
         
         # --- 大地の画像履歴 ---
@@ -118,12 +139,9 @@ if page == "レシート撮影📷":
             if not df_daichi.empty:
                 for _, r in df_daichi.iterrows():
                     label = f"🧾 {r['日時']}"
-                    # 改善：プルダウンではなく、タップすると下に開くアコーディオン形式
                     with st.expander(label):
                         if r["image_url"]:
                             st.image(r["image_url"], use_container_width=True)
-                            
-                            # 各写真の中に削除ボタンを配置
                             if st.button("🗑️ このレシートを削除", key=f"del_{r['id']}"):
                                 with st.spinner("削除中...⏳"):
                                     delete_image(r["id"])
@@ -142,12 +160,9 @@ if page == "レシート撮影📷":
             if not df_hinako.empty:
                 for _, r in df_hinako.iterrows():
                     label = f"🧾 {r['日時']}"
-                    # 改善：プルダウンではなく、タップすると下に開くアコーディオン形式
                     with st.expander(label):
                         if r["image_url"]:
                             st.image(r["image_url"], use_container_width=True)
-                            
-                            # 各写真の中に削除ボタンを配置
                             if st.button("🗑️ このレシートを削除", key=f"del_{r['id']}"):
                                 with st.spinner("削除中...⏳"):
                                     delete_image(r["id"])
@@ -192,8 +207,8 @@ elif page == "リスト管理🐇":
                 st.cache_data.clear()
                 st.rerun()
 
-# --- [機能2] 月別集計・リセット ---
-elif page == "月別集計・リセット🐻":
+# --- [機能2] 月別集計・リreset ---
+elif page == "月別集計・リreset🐻":
     st.header("🐻月支出")
     all_expenses = get_data("expenses")
     if all_expenses:
