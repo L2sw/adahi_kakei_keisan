@@ -134,7 +134,7 @@ if page == "レシート撮影📷":
     st.write("---")
     
     # 🛠️ 【新機能】ログイン中のユーザーに応じた「自分のレシート全削除機能」
-    st.subheader(f"⚠️ 自分のレシートを一括削除")
+    st.subheader(f"🥎レシート一括削除")
     st.write(f"自分が撮影したレシートのみをすべて削除できるよ🦎")
     
     confirm_all_del = st.checkbox(f"🚙本当に【{current_user}】のレシートを全削除する？🌰")
