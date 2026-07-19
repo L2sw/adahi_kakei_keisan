@@ -49,7 +49,7 @@ def delete_image(doc_id):
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="wide")
 
-# 💡 【追加】 表示の間隔をギリギリまで詰めるためのカスタムCSS
+# 表示の間隔をギリギリまで詰めるためのカスタムCSS
 st.markdown("""
     <style>
         /* アコーディオン（expander）の外枠と上下の余白を最小化 */
@@ -80,7 +80,7 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-# メニュー設定
+# メメニュー設定
 page = st.sidebar.radio("🐭🐄🐯🐍 メニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リreset🐻", "管理者設定🍖"])
 
 # --- [修正ページ] レシート撮影 ---
@@ -88,9 +88,8 @@ if page == "レシート撮影📷":
     st.header("📷 レシート撮影・管理")
     st.write("ここで撮影したレシートは、下の履歴からいつでも確認・削除ができます。")
     
-    # 💡 【修正】 外カメラ（背面カメラ）をデフォルトにする正しい指定
-    # Streamlitの公式仕様に基づき、大文字の "ENVIRONMENT" で指定することでエラーを回避しつつ外カメラで起動させます
-    img_file = st.camera_input("レシートをパシャリ（納得いくまで撮り直しできます）", facing_mode="ENVIRONMENT")
+    # 🛠️ 【修正】 エラーの原因だった facing_mode を削除し、標準仕様に戻しました。
+    img_file = st.camera_input("レシートをパシャリ（納得いくまで撮り直しできます）")
     
     if img_file is not None:
         st.success("写真が準備できました！保存する場合は下のボタンを押してください。")
