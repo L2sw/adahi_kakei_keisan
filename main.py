@@ -85,12 +85,11 @@ if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
 # メニュー設定
-page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リreset🐻", "管理者設定🍖"])
+page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- レシート撮影ページ ---
 if page == "レシート撮影📷":
-    st.header("📷 レシート撮影・管理")
-    st.write("「ファイルを選択」を押すとスマホのカメラが起動します。撮影するか、アルバムから選んでください。")
+    st.header("📸 パシャる💩")
     
     # 🛠️ 連続撮影対応のための仕掛け：動的な一意のキー、またはセッションステートで制御するために key を指定
     if "uploader_key" not in st.session_state:
@@ -133,7 +132,6 @@ if page == "レシート撮影📷":
                 st.rerun()
                 
     st.write("---")
-    st.subheader("🗂️ 保存されたレシート履歴")
     
     # 保存された画像の取得と一覧表示
     receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
@@ -157,7 +155,7 @@ if page == "レシート撮影📷":
         
         # --- 大地の画像履歴 ---
         with col_d:
-            st.markdown("### 🧔 大地が撮ったレシート")
+            st.markdown("### 🐄大地レシート")
             if not df_daichi.empty:
                 for _, r in df_daichi.iterrows():
                     label = f"🧾 {r['日時']}"
@@ -174,14 +172,14 @@ if page == "レシート撮影📷":
                         else:
                             st.info("画像URLがありません。")
             else:
-                st.info("大地のレシート履歴はありません。")
+                st.info("✏大地のパシャlogはないよ")
                 
         # --- 日向子の画像履歴 ---
         with col_h:
-            st.markdown("### 👩 日向子が撮ったレシート")
+            st.markdown("### 🐇日向子レシート")
             if not df_hinako.empty:
                 for _, r in df_hinako.iterrows():
-                    label = f"🧾 {r['日時']}"
+                    label = f"🐥 {r['日時']}"
                     with st.expander(label):
                         if r["image_url"]:
                             st.image(r["image_url"], use_container_width=True)
@@ -195,7 +193,7 @@ if page == "レシート撮影📷":
                         else:
                             st.info("画像URLがありません。")
             else:
-                st.info("日向子のレシート履歴はありません。")
+                st.info("💗日向子のパシャlogはないよ")
     else:
         st.info("まだ保存されたレシートはありません。")
 
@@ -230,7 +228,7 @@ elif page == "リスト管理🐇":
                 st.rerun()
 
 # --- 月別集計・リreset ---
-elif page == "月別集計・リreset🐻":
+elif page == "月別集計・リセット🐻":
     st.header("🐻月支出")
     all_expenses = get_data("expenses")
     if all_expenses:
