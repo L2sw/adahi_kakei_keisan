@@ -1,23 +1,21 @@
 import streamlit as st
 from google.cloud import firestore
-from google.cloud import storage  # 追加：ストレージ用
+from google.cloud import storage
 from google.oauth2 import service_account
 import json
 import pandas as pd
-from PIL import Image  # 追加：画像軽量化用
-import io  # 追加：データ変換用
-
-# ==========================================================
-# ★★★ 設定済みのストレージバケット名 ★★★
-BUCKET_NAME = "kakei-adachi.firebasestorage.app"
-# ==========================================================
+from PIL import Image
+import io
 
 # --- データベース・ストレージ接続 ---
 key_dict = json.loads(st.secrets["textkey"])
 creds = service_account.Credentials.from_service_account_info(key_dict)
 db = firestore.Client(credentials=creds)
-storage_client = storage.Client(credentials=creds)  # ストレージ用クライアント
-bucket = storage_client.bucket(BUCKET_NAME)  # バケットの取得
+
+# ★★★ Firebase Storageの設定 ★★★
+BUCKET_NAME = "kakei-adachi.firebasestorage.app"
+storage_client = storage.Client(credentials=creds)
+bucket = storage_client.bucket(BUCKET_NAME)
 
 # --- パフォーマンス向上 ---
 @st.cache_data(ttl=60)
@@ -25,26 +23,24 @@ def get_data(collection):
     docs = db.collection(collection).stream()
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
 
-# --- 画像の処理関数 ---
+# --- 画像処理用の関数 ---
 def upload_image(image_file, doc_id):
-    """画像を圧縮してFirebase Storageにアップロードする"""
+    """画像を圧縮してFirebase Storageにアップロードし、URLを返す"""
     img = Image.open(image_file)
-    img.thumbnail((1024, 1024))  # 無料枠を長持ちさせるために最大1024pxに縮小
+    img.thumbnail((1024, 1024))  # 容量節約のため最大1024pxにリサイズ
     
-    # メモリ上でJPEG形式に変換
     output = io.BytesIO()
     img.save(output, format="JPEG", quality=80)
     output.seek(0)
     
-    # Storageに保存
     blob = bucket.blob(f"receipts/{doc_id}.jpg")
     blob.upload_from_file(output, content_type="image/jpeg")
     
-    # 30日間有効な確認用の一時的なURLを発行して返す
+    # 30日間有効な署名付きURLを発行
     return blob.generate_signed_url(expiration=30*24*60*60)
 
 def delete_image(doc_id):
-    """Firestoreのデータ削除と同時にStorageの画像も消す"""
+    """Firebase Storage上の画像を削除する"""
     blob = bucket.blob(f"receipts/{doc_id}.jpg")
     if blob.exists():
         blob.delete()
@@ -58,10 +54,89 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
+# ★★★ メニューに「レシート撮影📷」を新しく追加しました ★★★
+page = st.sidebar.radio("🐭🐄🐯🐍 メニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
+
+# --- [新規ページ] レシート撮影 ---
+if page == "レシート撮影📷":
+    st.header("📷 レシート撮影・管理")
+    st.write("ここで撮影したレシートは、下の履歴からいつでも確認・削除ができます。")
+    
+    # 1. 撮影エリア
+    img_file = st.camera_input("レシートをパシャリ（納得いくまで撮り直しできます）")
+    
+    if img_file is not None:
+        st.success("写真が準備できました！保存する場合は下のボタンを押してください。")
+        if st.button("このレシート画像を保存する💾", use_container_width=True):
+            with st.spinner("画像をアップロード中...⏳"):
+                # データベースに画像管理用の専用レコードを作成
+                doc_ref = db.collection("receipt_images").add({
+                    "person": current_user,
+                    "timestamp": firestore.SERVER_TIMESTAMP,
+                    "image_url": ""
+                })
+                doc_id = doc_ref[1].id
+                
+                # 画像をストレージに保存してURLを更新
+                image_url = upload_image(img_file, doc_id)
+                doc_ref[1].update({"image_url": image_url})
+                
+                st.success("保存が完了しました！")
+                st.cache_data.clear()
+                st.rerun()
+                
+    st.write("---")
+    st.subheader("🗂️ 保存されたレシート履歴")
+    
+    # 2. 保存された画像の取得と一覧表示
+    # ※リアルタイムに近い状態で確認できるよう、この一覧はキャッシュ(get_data)を使わず直接取得します
+    receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
+    receipts = [{"id": doc.id, **doc.to_dict()} for doc in receipt_docs]
+    
+    if receipts:
+        df_receipts = pd.DataFrame(receipts)
+        
+        # タイムゾーン変換処理
+        timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_receipts["timestamp"]]
+        df_receipts["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
+        if df_receipts["timestamp"].dt.tz is None:
+            df_receipts["timestamp"] = df_receipts["timestamp"].dt.tz_localize('UTC')
+        df_receipts["timestamp"] = df_receipts["timestamp"].dt.tz_convert('Asia/Tokyo')
+        df_receipts["日時"] = df_receipts["timestamp"].dt.strftime("%Y/%m/%d %H:%M").fillna("-")
+        
+        # 閲覧・削除用の選択肢を作成
+        img_opts = {}
+        for _, r in df_receipts.iterrows():
+            label = f"{r['日時']} ({r['person']}が撮影)"
+            img_opts[label] = {"id": r["id"], "url": r["image_url"]}
+            
+        sel_label = st.selectbox("確認・削除したいレシートを選択してください", list(img_opts.keys()))
+        
+        if sel_label:
+            selected_data = img_opts[sel_label]
+            
+            # 画像の表示
+            if selected_data["url"]:
+                st.image(selected_data["url"], caption=sel_label, use_container_width=True)
+            else:
+                st.info("画像の処理中、またはURLがありません。")
+                
+            # 不要な場合の削除機能
+            st.write("---")
+            with st.expander("🗑️ このレシートを削除する"):
+                st.warning("この操作を行うと、画像データは完全に消去されます。")
+                if st.button("完全に削除する", key="del_receipt_btn"):
+                    with st.spinner("削除中...⏳"):
+                        delete_image(selected_data["id"])  # Storageから削除
+                        db.collection("receipt_images").document(selected_data["id"]).delete()  # Firestoreから削除
+                        st.success("削除しました。")
+                        st.cache_data.clear()
+                        st.rerun()
+    else:
+        st.info("まだ保存されたレシートはありません。")
 
 # --- [機能1] リスト管理 ---
-if page == "リスト管理🐇":
+elif page == "リスト管理🐇":
     st.header("🐖 リスト管理")
     if "last_place" not in st.session_state: st.session_state.last_place = ""
     with st.form("list_form"):
@@ -155,27 +230,22 @@ elif page == "管理者設定🍖":
             target_month = st.selectbox("削除したい年月を選択", sorted(df_all["month"].dropna().unique()))
             if st.button(f"【{target_month}】のデータをすべて削除する"):
                 for _, row in df_all[df_all["month"] == target_month].iterrows():
-                    delete_image(row["id"])  # 画像があれば削除
                     db.collection("expenses").document(row["id"]).delete()
                 consent_ref.set({"daichi": False, "hinako": False})
                 st.cache_data.clear(); st.rerun()
 
         if st.button("【全データ】を完全に削除する"):
-            for doc in db.collection("expenses").stream(): 
-                delete_image(doc.id)  # 画像削除
-                doc.reference.delete()
+            for doc in db.collection("expenses").stream(): doc.reference.delete()
             consent_ref.set({"daichi": False, "hinako": False})
             st.cache_data.clear(); st.rerun()
         if st.button("【アーカイブ済み期間】のデータを完全に削除する"):
-            for doc in db.collection("expenses").where("is_archived", "==", True).stream(): 
-                delete_image(doc.id)  # 画像削除
-                doc.reference.delete()
+            for doc in db.collection("expenses").where("is_archived", "==", True).stream(): doc.reference.delete()
             consent_ref.set({"daichi": False, "hinako": False})
             st.cache_data.clear(); st.rerun()
     else:
         st.info("両名が同意し、チェックボックスをオンにするとボタンが有効になります。")
 
-# --- [機能3] 家計簿入力 ---
+# --- [機能3] 家計簿入力 (台帳入力) ---
 else:
     st.markdown("## 🐘 2人だけの台帳")
     cats = get_data("categories")
@@ -198,34 +268,12 @@ else:
         c5, c6 = st.columns([2, 1])
         amount = c5.number_input("金額(円)", value=None, min_value=0, step=1, format="%d", label_visibility="collapsed", placeholder="￥🌲")
         reimburse = c6.checkbox("全立替")
-        
-        # --- カメラ・レシート撮影機能 ---
-        st.write("---")
-        img_file = st.camera_input("📷 レシートをパシャリ（何度でも取り直しできます）")
          
         if st.button("送信⚡"):
             place = txt_p if txt_p else st.session_state.place_sel
             item = txt_i if txt_i else sel_i
             if amount and place and item:
-                # 1. まずFirestoreにテキストデータを追加し、ドキュメントIDを取得
-                doc_ref = db.collection("expenses").add({
-                    "person": current_user, 
-                    "place": place, 
-                    "item": item, 
-                    "amount": int(amount), 
-                    "is_reimburse": bool(reimburse), 
-                    "timestamp": firestore.SERVER_TIMESTAMP, 
-                    "is_archived": False,
-                    "image_url": ""  # 初期値は空
-                })
-                
-                # 2. 写真が撮影されていたらアップロード処理を行う
-                if img_file is not None:
-                    with st.spinner("画像をアップロード中...⏳"):
-                        image_url = upload_image(img_file, doc_ref[1].id)
-                        # 発行された画像URLをFirestoreに追記
-                        doc_ref[1].update({"image_url": image_url})
-                
+                db.collection("expenses").add({"person": current_user, "place": place, "item": item, "amount": int(amount), "is_reimburse": bool(reimburse), "timestamp": firestore.SERVER_TIMESTAMP, "is_archived": False})
                 st.session_state.place_sel = ""
                 st.cache_data.clear(); st.rerun()
 
@@ -260,28 +308,12 @@ else:
                 st.subheader(f"{u}log🍄")
                 udf = df[df["person"]==u].copy()
                 udf["日時"] = udf["timestamp"].dt.strftime("%-m/%-d %H:%M").fillna("-")
-                
-                # 画像の有無がわかるように一覧テーブル用データに「📷」マークを追加
-                udf["📷"] = udf["image_url"].apply(lambda x: "あり" if x else "なし")
-                
-                # データフレームの表示（📷列を含める）
-                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse", "📷"]].rename(columns={"place": "場所", "item": "品", "amount": "￥", "is_reimburse": "T"}), use_container_width=True, hide_index=True)
-                
-                # --- レシート画像の確認用エクスパンダー ---
-                udf_with_img = udf[udf["image_url"] != ""].copy()
-                if not udf_with_img.empty:
-                    with st.expander("📷 レシート写真を確認する"):
-                        img_opts = {f"{r['日時']} - {r['place']} ({r['amount']}円)": r['image_url'] for _, r in udf_with_img.iterrows()}
-                        sel_img = st.selectbox("確認したいレシートを選択", list(img_opts.keys()), key=f"img_sel_{u}")
-                        if sel_img:
-                            st.image(img_opts[sel_img], use_container_width=True)
-
+                st.dataframe(udf[["日時", "place", "item", "amount", "is_reimburse"]].rename(columns={"place": "場所", "item": "品", "amount": "￥", "is_reimburse": "T"}), use_container_width=True, hide_index=True)
                 if u == current_user:
                     with st.expander("🍅 削除"):
                         opts = {f"{r['日時']} {r['place']} {r['item']} {r['amount']}円": r['id'] for _, r in udf.iterrows()}
-                        sel = st.selectbox("選択", opts.keys())
+                        sel = st.selectbox("選択", opts.keys(), key=f"sel_del_{u}")
                         if st.button("削除", key=f"del_{u}"):
-                            delete_image(opts[sel])  # Firebase Storageの写真も一緒に消す
                             db.collection("expenses").document(opts[sel]).delete()
                             st.cache_data.clear(); st.rerun()
         show(c1, "大地"); show(c2, "日向子")
