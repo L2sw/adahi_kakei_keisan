@@ -131,7 +131,34 @@ if page == "レシート撮影📷":
                 st.cache_data.clear()
                 st.rerun()
                 
+    st.write("---")
     
+    # 🛠️ 【新機能】ログイン中のユーザーに応じた「自分のレシート全削除機能」
+    st.subheader(f"⚠️ 自分のレシートを一括削除")
+    st.write(f"現在、**【{current_user}】**としてログインしています。自分が撮影したレシートのみをすべて削除できます。")
+    
+    confirm_all_del = st.checkbox(f"本当に【{current_user}】のレシート履歴・画像をすべて完全に削除しますか？")
+    if st.button(f"🚨 {current_user}のレシートをすべて削除する", use_container_width=True, disabled=not confirm_all_del):
+        with st.spinner(f"{current_user}のデータを一括削除中...⏳"):
+            # ログイン中のユーザーのレシートのみを取得
+            my_receipts = db.collection("receipt_images").where("person", "==", current_user).stream()
+            deleted_count = 0
+            for doc in my_receipts:
+                # Storageの画像ファイルを削除
+                delete_image(doc.id)
+                # Firestoreのドキュメントを削除
+                doc.reference.delete()
+                deleted_count += 1
+            
+            if deleted_count > 0:
+                st.success(f"{deleted_count}件のレシートをすべて削除したよ！")
+            else:
+                st.info("削除するレシートがありませんでした。")
+            st.cache_data.clear()
+            st.rerun()
+
+    st.write("---")
+
     # 保存された画像の取得と一覧表示
     receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
     receipts = [{"id": doc.id, **doc.to_dict()} for doc in receipt_docs]
@@ -245,7 +272,7 @@ elif page == "月別集計・リセット🐻":
                 st.dataframe(df_m[["person", "place", "item", "amount"]].rename(columns={"person": "誰", "place": "場所", "item": "品", "amount": "￥"}), use_container_width=True, hide_index=True)
      
     st.write("---")
-    st.subheader("🐢精算リreset（2人の同意が必要だどん）")
+    st.subheader("🐢精算reset（2人の同意が必要だどん）")
     consent_ref = db.collection("consent").document("status")
     status = consent_ref.get().to_dict() or {"daichi": False, "hinako": False}
     st.write(f"大地: {'👼' if status.get('daichi') else '💀'} | 日向子: {'👼' if status.get('hinako') else '💀'}")
