@@ -55,7 +55,7 @@ def delete_image(doc_id):
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="wide")
 
-# 表示の間隔をギリギリまで詰めるためのカスタムCSS & ポップアップ（st.toast）のド派手化CSS
+# 表示の間隔をギリギリまで詰めるためのカスタムCSS
 st.markdown("""
     <style>
         [data-testid="stExpander"] {
@@ -76,23 +76,6 @@ st.markdown("""
         [data-testid="stFileUploader"] {
             margin-bottom: 15px !important;
         }
-        
-        /* 🚨 ド派手なポップアップ（st.toast）CSSカスタム */
-        div[data-testid="stToast"] {
-            background-color: #111111 !important;
-            border: 3px solid #FF0055 !important;
-            box-shadow: 0px 0px 20px #FF0055 !important;
-            color: #FFFFFF !important;
-            font-size: 16px !important;
-            font-weight: bold !important;
-            border-radius: 12px !important;
-            padding: 12px 20px !important;
-        }
-        div[data-testid="stToast"] p {
-            font-size: 16px !important;
-            color: #FFFF00 !important;
-            text-shadow: 1px 1px 2px #000;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -101,6 +84,28 @@ params = st.query_params
 user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
+
+# --- 🚨 10秒間で確実に自動消去されるド派手ダイアログ定義 ---
+@st.dialog("🚨 【要確認】ToDoリマインダー 🚨")
+def show_todo_alert_dialog(overdue_list, due_soon_list):
+    if overdue_list:
+        st.error("💥 **【超危険・期限切れ】**\n\n" + "\n".join(overdue_list))
+    if due_soon_list:
+        st.warning("⚡ **【緊急・今日明日の期限】**\n\n" + "\n".join(due_soon_list))
+    
+    st.caption("※ この画面は 10秒後 に自動で閉じます")
+    
+    # JavaScriptで10秒（10000ms）後にダイアログの閉じるボタン（×）を自動クリックして閉じる
+    components.html("""
+        <script>
+            setTimeout(function() {
+                var closeBtn = window.parent.document.querySelector('button[aria-label="Close"]');
+                if (closeBtn) {
+                    closeBtn.click();
+                }
+            }, 10000);
+        </script>
+    """, height=0, width=0)
 
 # --- 🔔 全ページ共通：期限直前・超過ToDoのポップアップ通知チェック ---
 if "todo_alert_shown" not in st.session_state:
@@ -116,43 +121,25 @@ if not st.session_state.todo_alert_shown:
         for t in all_todos:
             due_str = t.get("due_date")
             content = t.get("content", "名称未設定")
+            person = t.get("person", "不明")
             if due_str:
                 try:
                     due_dt = datetime.strptime(due_str, "%Y-%m-%d").date()
                     days_left = (due_dt - today).days
                     if days_left < 0:
-                        overdue_list.append(f"💥{content}({due_str})")
+                        overdue_list.append(f"・{content}（期限: {due_str} / 担当: {person}）")
                     elif 0 <= days_left <= 1:
-                        due_soon_list.append(f"⚡{content}({due_str})")
+                        due_soon_list.append(f"・{content}（期限: {due_str} / 担当: {person}）")
                 except ValueError:
                     pass
 
-        # 期限切れがあればド派手警告ポップアップ
-        if overdue_list:
-            st.toast(f"🚨【超危険・期限切れ】\n" + " / ".join(overdue_list), icon="🚨")
-        # 期限直前（今日・明日）があればド派手注意ポップアップ
-        if due_soon_list:
-            st.toast(f"🔥【緊急・もうすぐ期限】\n" + " / ".join(due_soon_list), icon="⏰")
-
         if overdue_list or due_soon_list:
-            # ⏱️ JavaScriptで表示時間を10秒間（10000ms）に延長する処理
-            components.html("""
-                <script>
-                    setTimeout(function() {
-                        var toasts = window.parent.document.querySelectorAll('div[data-testid="stToast"]');
-                        toasts.forEach(function(toast) {
-                            toast.style.transition = 'opacity 0.5s ease';
-                            toast.style.opacity = '0';
-                            setTimeout(function() { toast.remove(); }, 500);
-                        });
-                    }, 10000);
-                </script>
-            """, height=0, width=0)
+            show_todo_alert_dialog(overdue_list, due_soon_list)
 
     st.session_state.todo_alert_shown = True
 
 # メニュー設定
-page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "🍋ToDoリスト🍋", "月別集計・リセット🐻", "管理者設定🍖"])
+page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "ToDoリスト📝", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- レシート撮影ページ ---
 if page == "レシート撮影📷":
@@ -316,8 +303,11 @@ elif page == "リスト管理🐇":
                 st.rerun()
 
 # --- ToDoリスト ---
-elif page == "🍋ToDoリスト🍋":
-    st.header("💀 ToDoリスト")
+elif page == "ToDoリスト📝":
+    st.header("📝 ToDoリスト")
+
+    # ① 上部：やること一覧
+    st.subheader("📋 やること一覧")
 
     # ToDo一覧の取得と表示（超コンパクト化）
     todos = get_data("todos")
