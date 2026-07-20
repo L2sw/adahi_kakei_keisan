@@ -425,7 +425,6 @@ elif page == "🍋ToDoリスト🍋":
 
 # --- メモ帳ページ ---
 elif page == "メモ帳📝":
-    st.header("📝 2人だけのメモ帳")
     
     # データ取得（1つのドキュメント "shared_memo" を管理）
     memo_ref = db.collection("shared_memos").document("shared_memo")
@@ -450,7 +449,7 @@ elif page == "メモ帳📝":
                 dt = dt.tz_convert('Asia/Tokyo')
                 last_updated_at = dt.strftime("%Y/%m/%d %H:%M")
 
-    st.caption(f"✍️ 最終更新: **{last_updated_by}** ({last_updated_at})")
+    st.caption(f"🦆最終更新: **{last_updated_by}** ({last_updated_at})")
 
     # 自由入力できる大きなテキストエリア＆更新ボタン
     with st.form("simple_memo_form"):
@@ -462,7 +461,7 @@ elif page == "メモ帳📝":
             label_visibility="collapsed"
         )
         
-        save_btn = st.form_submit_button("最新状態に更新する 💾", use_container_width=True)
+        save_btn = st.form_submit_button("🦒最新状態に更新する🐪", use_container_width=True)
 
         if save_btn:
             memo_ref.set({
