@@ -132,7 +132,7 @@ if not st.session_state.todo_alert_shown:
             st.toast(f"🚨【超危険・期限切れ】\n" + " / ".join(overdue_list), icon="🚨")
         # 期限直前（今日・明日）があればド派手注意ポップアップ
         if due_soon_list:
-            st.toast(f"🔥【緊急・今日明日の期限】\n" + " / ".join(due_soon_list), icon="⏰")
+            st.toast(f"🔥【緊急・もうすぐ期限】\n" + " / ".join(due_soon_list), icon="⏰")
 
         if overdue_list or due_soon_list:
             # ⏱️ JavaScriptで表示時間を10秒間（10000ms）に延長する処理
@@ -152,7 +152,7 @@ if not st.session_state.todo_alert_shown:
     st.session_state.todo_alert_shown = True
 
 # メニュー設定
-page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "ToDoリスト📝", "月別集計・リセット🐻", "管理者設定🍖"])
+page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "🍋ToDoリスト🍋", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- レシート撮影ページ ---
 if page == "レシート撮影📷":
