@@ -55,7 +55,7 @@ def delete_image(doc_id):
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="wide")
 
-# 表示の間隔をギリギリまで詰めるためのカスタムCSS & 🚨超ド派手ポップアップ（st.toast）CSS
+# 表示の間隔をギリギリまで詰めるためのカスタムCSS
 st.markdown("""
     <style>
         [data-testid="stExpander"] {
@@ -75,40 +75,6 @@ st.markdown("""
         }
         [data-testid="stFileUploader"] {
             margin-bottom: 15px !important;
-        }
-        
-        /* 🚨 ド派手なポップアップ（st.toast）CSSカスタム */
-        div[data-testid="stToast"] {
-            background-color: #111111 !important;
-            border: 3px solid #FF0055 !important;
-            box-shadow: 0px 0px 20px #FF0055 !important;
-            color: #FFFFFF !important;
-            font-size: 16px !important;
-            font-weight: bold !important;
-            border-radius: 12px !important;
-            padding: 12px 20px !important;
-            white-space: pre-wrap !important;
-            max-height: none !important; /* 省略展開時の高さ制限解除 */
-        }
-        div[data-testid="stToast"] p {
-            font-size: 16px !important;
-            color: #FFFF00 !important;
-            text-shadow: 1px 1px 2px #000;
-            white-space: pre-wrap !important;
-            -webkit-line-clamp: unset !important; /* 行数制限解除 */
-            max-height: none !important;
-        }
-        /* View more ボタンの強制非表示 ＆ 自動全展開 */
-        div[data-testid="stToast"] [data-testid="stExpander"] {
-            border: none !important;
-            background: transparent !important;
-        }
-        div[data-testid="stToast"] button[aria-expanded] {
-            display: none !important; /* View more ボタン自体を消す */
-        }
-        div[data-testid="stToast"] [data-testid="stExpanderDetails"] {
-            display: block !important; /* 最初から中身を全表示 */
-            padding: 0px !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -144,35 +110,64 @@ if not st.session_state.todo_alert_shown:
                 except ValueError:
                     pass
 
-        # 期限切れがあればド派手警告ポップアップ（改行区切り）
-        if overdue_list:
-            st.toast(f"🚨【超危険・期限切れ】\n" + "\n".join(overdue_list), icon="🚨")
-        # 期限直前（今日・明日）があればド派手注意ポップアップ（改行区切り）
-        if due_soon_list:
-            st.toast(f"🔥【緊急・今日明日の期限】\n" + "\n".join(due_soon_list), icon="⏰")
-
+        # 🚨 完全自作のド派手ネオンポップアップ（View More発生不可＆10秒完全タイマー）
         if overdue_list or due_soon_list:
-            # ⏱️ 4秒で勝手に消えるCSSアニメーションを無効化し、確実に10秒間表示させるJavaScript制御
-            components.html("""
+            popup_html = ""
+            if overdue_list:
+                popup_html += "<div style='color: #FF0055; font-weight: bold; margin-bottom: 6px;'>🚨【超危険・期限切れ】</div>"
+                for item in overdue_list:
+                    popup_html += f"<div style='color: #FFFF00; font-size: 14px; margin-bottom: 4px;'>・{item}</div>"
+            
+            if due_soon_list:
+                if overdue_list:
+                    popup_html += "<div style='margin-top: 10px;'></div>"
+                popup_html += "<div style='color: #FF9900; font-weight: bold; margin-bottom: 6px;'>🔥【緊急・今日明日の期限】</div>"
+                for item in due_soon_list:
+                    popup_html += f"<div style='color: #FFFF00; font-size: 14px; margin-bottom: 4px;'>・{item}</div>"
+
+            # JavaScriptで画面右下に固定挿入し、10秒（10000ms）で消去
+            components.html(f"""
                 <script>
-                    var checkToast = setInterval(function() {
-                        var toasts = window.parent.document.querySelectorAll('div[data-testid="stToast"]');
-                        if (toasts.length > 0) {
-                            clearInterval(checkToast);
-                            toasts.forEach(function(toast) {
-                                // アニメーションタイマーを上書き固定
-                                toast.style.animation = 'none';
-                                toast.style.opacity = '1';
-                                
-                                // 10秒（10000ms）後に消去
-                                setTimeout(function() {
-                                    toast.style.transition = 'opacity 0.8s ease';
-                                    toast.style.opacity = '0';
-                                    setTimeout(function() { toast.remove(); }, 800);
-                                }, 10000);
-                            });
-                        }
-                    }, 100);
+                    var doc = window.parent.document;
+                    var oldToast = doc.getElementById('custom-neon-toast');
+                    if (oldToast) oldToast.remove();
+
+                    var toast = doc.createElement('div');
+                    toast.id = 'custom-neon-toast';
+                    toast.innerHTML = `{popup_html}`;
+                    
+                    // デザイン（真っ黒背景 × 赤ピンク枠 × 蛍光イエロー文字 × ネオン発光）
+                    Object.assign(toast.style, {{
+                        position: 'fixed',
+                        bottom: '24px',
+                        right: '24px',
+                        backgroundColor: '#111111',
+                        border: '3px solid #FF0055',
+                        boxShadow: '0px 0px 20px #FF0055',
+                        borderRadius: '12px',
+                        padding: '16px 20px',
+                        zIndex: '999999',
+                        maxWidth: '380px',
+                        fontFamily: 'sans-serif',
+                        opacity: '0',
+                        transition: 'opacity 0.5s ease',
+                        pointerEvents: 'none'
+                    }});
+
+                    doc.body.appendChild(toast);
+
+                    // 表示
+                    setTimeout(function() {{
+                        toast.style.opacity = '1';
+                    }}, 100);
+
+                    // 10秒間表示した後にフェードアウト削除
+                    setTimeout(function() {{
+                        toast.style.opacity = '0';
+                        setTimeout(function() {{
+                            toast.remove();
+                        }}, 500);
+                    }}, 10000);
                 </script>
             """, height=0, width=0)
 
