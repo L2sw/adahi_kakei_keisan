@@ -110,22 +110,22 @@ if not st.session_state.todo_alert_shown:
                 except ValueError:
                     pass
 
-        # 🚨 完全自作のド派手ネオンポップアップ（View More発生不可＆10秒完全タイマー）
+        # 🚨 完全自作のド派手ネオンポップアップ（画面中央配置 & View More発生不可 & 10秒完全タイマー）
         if overdue_list or due_soon_list:
             popup_html = ""
             if overdue_list:
-                popup_html += "<div style='color: #FF0055; font-weight: bold; margin-bottom: 6px;'>🚨【超危険・期限切れ】</div>"
+                popup_html += "<div style='color: #FF0055; font-weight: bold; font-size: 17px; margin-bottom: 8px;'>🚨【超危険・期限切れ】</div>"
                 for item in overdue_list:
-                    popup_html += f"<div style='color: #FFFF00; font-size: 14px; margin-bottom: 4px;'>・{item}</div>"
+                    popup_html += f"<div style='color: #FFFF00; font-size: 15px; margin-bottom: 4px;'>・{item}</div>"
             
             if due_soon_list:
                 if overdue_list:
-                    popup_html += "<div style='margin-top: 10px;'></div>"
-                popup_html += "<div style='color: #FF9900; font-weight: bold; margin-bottom: 6px;'>🔥【緊急・今日明日の期限】</div>"
+                    popup_html += "<div style='margin-top: 12px;'></div>"
+                popup_html += "<div style='color: #FF9900; font-weight: bold; font-size: 17px; margin-bottom: 8px;'>🔥【緊急・今日明日の期限】</div>"
                 for item in due_soon_list:
-                    popup_html += f"<div style='color: #FFFF00; font-size: 14px; margin-bottom: 4px;'>・{item}</div>"
+                    popup_html += f"<div style='color: #FFFF00; font-size: 15px; margin-bottom: 4px;'>・{item}</div>"
 
-            # JavaScriptで画面右下に固定挿入し、10秒（10000ms）で消去
+            # JavaScriptで画面中央に固定挿入し、10秒（10000ms）で消去
             components.html(f"""
                 <script>
                     var doc = window.parent.document;
@@ -136,18 +136,22 @@ if not st.session_state.todo_alert_shown:
                     toast.id = 'custom-neon-toast';
                     toast.innerHTML = `{popup_html}`;
                     
-                    // デザイン（真っ黒背景 × 赤ピンク枠 × 蛍光イエロー文字 × ネオン発光）
+                    // デザイン（画面真ん中配置 × 真っ黒背景 × 赤ピンク枠 × 蛍光イエロー文字 × ネオン発光）
                     Object.assign(toast.style, {{
                         position: 'fixed',
-                        bottom: '24px',
-                        right: '24px',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
                         backgroundColor: '#111111',
-                        border: '3px solid #FF0055',
-                        boxShadow: '0px 0px 20px #FF0055',
-                        borderRadius: '12px',
-                        padding: '16px 20px',
+                        border: '3.5px solid #FF0055',
+                        boxShadow: '0px 0px 30px #FF0055',
+                        borderRadius: '16px',
+                        padding: '20px 24px',
                         zIndex: '999999',
-                        maxWidth: '380px',
+                        minWidth: '300px',
+                        maxWidth: '85vw',
+                        maxHeight: '80vh',
+                        overflowY: 'auto',
                         fontFamily: 'sans-serif',
                         opacity: '0',
                         transition: 'opacity 0.5s ease',
