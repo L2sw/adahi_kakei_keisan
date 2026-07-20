@@ -316,11 +316,8 @@ elif page == "リスト管理🐇":
                 st.rerun()
 
 # --- ToDoリスト ---
-elif page == "ToDoリスト📝":
-    st.header("📝 ToDoリスト")
-
-    # ① 上部：やること一覧
-    st.subheader("📋 やること一覧")
+elif page == "🍋ToDoリスト🍋":
+    st.header("💀 ToDoリスト")
 
     # ToDo一覧の取得と表示（超コンパクト化）
     todos = get_data("todos")
