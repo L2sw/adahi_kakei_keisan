@@ -55,7 +55,7 @@ def delete_image(doc_id):
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="wide")
 
-# 表示の間隔をギリギリまで詰めるためのカスタムCSS
+# 表示の間隔を調整するためのカスタムCSS
 st.markdown("""
     <style>
         [data-testid="stExpander"] {
@@ -75,6 +75,15 @@ st.markdown("""
         }
         [data-testid="stFileUploader"] {
             margin-bottom: 15px !important;
+        }
+        /* 🎨 サイドバーのメニュー項目の間隔を広げる設定 */
+        [data-testid="stSidebar"] [data-testid="stWidgetLabel"] {
+            margin-bottom: 8px !important;
+        }
+        [data-testid="stSidebar"] div[role="radiogroup"] > label {
+            padding-top: 10px !important;
+            padding-bottom: 10px !important;
+            margin-bottom: 4px !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -177,7 +186,7 @@ if not st.session_state.todo_alert_shown:
 
     st.session_state.todo_alert_shown = True
 
-# メニュー設定（「メモ帳📝」を追加）
+# メニュー設定
 page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "🍋ToDoリスト🍋", "メモ帳📝", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- レシート撮影ページ ---
@@ -414,7 +423,7 @@ elif page == "🍋ToDoリスト🍋":
                 else:
                     st.error("内容を入力してください！")
 
-# --- 🌟【新規追加】シンプルメモ帳ページ ---
+# --- メモ帳ページ ---
 elif page == "メモ帳📝":
     st.header("📝 2人だけのメモ帳")
     
