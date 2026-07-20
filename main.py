@@ -87,11 +87,13 @@ st.markdown("""
             font-weight: bold !important;
             border-radius: 12px !important;
             padding: 12px 20px !important;
+            white-space: pre-wrap !important; /* 改行を画面にしっかり反映 */
         }
         div[data-testid="stToast"] p {
             font-size: 16px !important;
             color: #FFFF00 !important;
             text-shadow: 1px 1px 2px #000;
+            white-space: pre-wrap !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -121,31 +123,41 @@ if not st.session_state.todo_alert_shown:
                     due_dt = datetime.strptime(due_str, "%Y-%m-%d").date()
                     days_left = (due_dt - today).days
                     if days_left < 0:
-                        overdue_list.append(f"💥{content}({due_str})")
+                        overdue_list.append(f"💥 {content} ({due_str})")
                     elif 0 <= days_left <= 1:
-                        due_soon_list.append(f"⚡{content}({due_str})")
+                        due_soon_list.append(f"⚡ {content} ({due_str})")
                 except ValueError:
                     pass
 
-        # 期限切れがあればド派手警告ポップアップ
+        # 期限切れがあればド派手警告ポップアップ（改行区切り）
         if overdue_list:
-            st.toast(f"🚨【超危険・期限切れ】\n" + " / ".join(overdue_list), icon="🚨")
-        # 期限直前（今日・明日）があればド派手注意ポップアップ
+            st.toast(f"🚨【超危険・期限切れ】\n" + "\n".join(overdue_list), icon="🚨")
+        # 期限直前（今日・明日）があればド派手注意ポップアップ（改行区切り）
         if due_soon_list:
-            st.toast(f"🔥【緊急・今日明日の期限】\n" + " / ".join(due_soon_list), icon="⏰")
+            st.toast(f"🔥【緊急・今日明日の期限】\n" + "\n".join(due_soon_list), icon="⏰")
 
         if overdue_list or due_soon_list:
-            # ⏱️ JavaScriptで表示時間を10秒間（10000ms）に延長する処理
+            # ⏱️ 4秒で勝手に消えるCSSアニメーションを無効化し、確実に10秒間表示させるJavaScript制御
             components.html("""
                 <script>
-                    setTimeout(function() {
+                    var checkToast = setInterval(function() {
                         var toasts = window.parent.document.querySelectorAll('div[data-testid="stToast"]');
-                        toasts.forEach(function(toast) {
-                            toast.style.transition = 'opacity 0.5s ease';
-                            toast.style.opacity = '0';
-                            setTimeout(function() { toast.remove(); }, 500);
-                        });
-                    }, 10000);
+                        if (toasts.length > 0) {
+                            clearInterval(checkToast);
+                            toasts.forEach(function(toast) {
+                                // アニメーションタイマーを上書き固定
+                                toast.style.animation = 'none';
+                                toast.style.opacity = '1';
+                                
+                                // 10秒（10000ms）後に消去
+                                setTimeout(function() {
+                                    toast.style.transition = 'opacity 0.8s ease';
+                                    toast.style.opacity = '0';
+                                    setTimeout(function() { toast.remove(); }, 800);
+                                }, 10000);
+                            });
+                        }
+                    }, 100);
                 </script>
             """, height=0, width=0)
 
