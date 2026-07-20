@@ -84,6 +84,40 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
+# --- 🔔 全ページ共通：期限直前・超過ToDoのポップアップ通知チェック ---
+if "todo_alert_shown" not in st.session_state:
+    st.session_state.todo_alert_shown = False
+
+if not st.session_state.todo_alert_shown:
+    all_todos = get_data("todos")
+    if all_todos:
+        today = date.today()
+        overdue_list = []
+        due_soon_list = []
+        
+        for t in all_todos:
+            due_str = t.get("due_date")
+            content = t.get("content", "名称未設定")
+            if due_str:
+                try:
+                    due_dt = datetime.strptime(due_str, "%Y-%m-%d").date()
+                    days_left = (due_dt - today).days
+                    if days_left < 0:
+                        overdue_list.append(f"・{content} (期限: {due_str})")
+                    elif 0 <= days_left <= 1:
+                        due_soon_list.append(f"・{content} (期限: {due_str})")
+                except ValueError:
+                    pass
+
+        # 期限切れがあれば警告ポップアップ
+        if overdue_list:
+            st.toast(f"🚨 **【警告】期限切れのToDoが {len(overdue_list)} 件あります！**\n" + "\n".join(overdue_list), icon="🚨")
+        # 期限直前（今日・明日）があれば注意ポップアップ
+        if due_soon_list:
+            st.toast(f"⏰ **【注意】今日・明日が期限のToDoが {len(due_soon_list)} 件あります！**\n" + "\n".join(due_soon_list), icon="⏰")
+
+    st.session_state.todo_alert_shown = True
+
 # メニュー設定
 page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "ToDoリスト📝", "月別集計・リセット🐻", "管理者設定🍖"])
 
@@ -133,9 +167,9 @@ if page == "レシート撮影📷":
     
     # 🛠️ 【新機能】ログイン中のユーザーに応じた「自分のレシート全削除機能」
     st.subheader(f"🥎レシート一括削除")
-    st.write(f"自分が撮影したレシートのみをすべて削除できるよ🦎")
+    st.write(f"自分が撮影したレシートのみをすべて削除できるよ蜥")
     
-    confirm_all_del = st.checkbox(f"🚙本当に【{current_user}】のレシートを全削除する？🌰")
+    confirm_all_del = st.checkbox(f"🚙本当に【{current_user}】のレシートを全削除する？栗")
     if st.button(f"🚨 {current_user}のを全削除する", use_container_width=True, disabled=not confirm_all_del):
         with st.spinner(f"{current_user}のデータを一括削除中...⏳"):
             # ログイン中のユーザーのレシートのみを取得
