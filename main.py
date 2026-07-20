@@ -55,7 +55,7 @@ def delete_image(doc_id):
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="wide")
 
-# 表示の間隔をギリギリまで詰めるためのカスタムCSS
+# 表示の間隔をギリギリまで詰めるためのカスタムCSS & 🚨超ド派手ポップアップCSS
 st.markdown("""
     <style>
         [data-testid="stExpander"] {
@@ -75,6 +75,24 @@ st.markdown("""
         }
         [data-testid="stFileUploader"] {
             margin-bottom: 15px !important;
+        }
+        
+        /* 🚨 ダイアログ（st.dialog）の超ド派手化CSSカスタム */
+        div[role="dialog"] {
+            background-color: #111111 !important;
+            border: 3.5px solid #FF0055 !important;
+            box-shadow: 0px 0px 25px #FF0055 !important;
+            border-radius: 16px !important;
+        }
+        div[role="dialog"] h2 {
+            color: #FF0055 !important;
+            font-weight: 900 !important;
+            text-shadow: 0px 0px 8px #FF0055 !important;
+        }
+        div[role="dialog"] p, div[role="dialog"] span {
+            color: #FFFF00 !important;
+            font-size: 16px !important;
+            font-weight: bold !important;
         }
     </style>
 """, unsafe_allow_html=True)
