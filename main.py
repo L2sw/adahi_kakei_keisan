@@ -110,7 +110,7 @@ if not st.session_state.todo_alert_shown:
                 except ValueError:
                     pass
 
-        # 🚨 完全自作のド派手ネオンポップアップ（画面中央配置 & View More発生不可 & 10秒完全タイマー）
+        # 🚨 完全自作のド派手ネオンポップアップ（画面上部配置 & View More発生不可 & 10秒完全タイマー）
         if overdue_list or due_soon_list:
             popup_html = ""
             if overdue_list:
@@ -125,7 +125,7 @@ if not st.session_state.todo_alert_shown:
                 for item in due_soon_list:
                     popup_html += f"<div style='color: #FFFF00; font-size: 15px; margin-bottom: 4px;'>・{item}</div>"
 
-            # JavaScriptで画面中央に固定挿入し、10秒（10000ms）で消去
+            # JavaScriptで画面上寄り（top: 20%）に固定挿入し、10秒（10000ms）で消去
             components.html(f"""
                 <script>
                     var doc = window.parent.document;
@@ -136,12 +136,12 @@ if not st.session_state.todo_alert_shown:
                     toast.id = 'custom-neon-toast';
                     toast.innerHTML = `{popup_html}`;
                     
-                    // デザイン（画面真ん中配置 × 真っ黒背景 × 赤ピンク枠 × 蛍光イエロー文字 × ネオン発光）
+                    // デザイン（画面上寄り配置 × 真っ黒背景 × 赤ピンク枠 × 蛍光イエロー文字 × ネオン発光）
                     Object.assign(toast.style, {{
                         position: 'fixed',
-                        top: '50%',
+                        top: '20%',
                         left: '50%',
-                        transform: 'translate(-50%, -50%)',
+                        transform: 'translateX(-50%)',
                         backgroundColor: '#111111',
                         border: '3.5px solid #FF0055',
                         boxShadow: '0px 0px 30px #FF0055',
@@ -150,7 +150,7 @@ if not st.session_state.todo_alert_shown:
                         zIndex: '999999',
                         minWidth: '300px',
                         maxWidth: '85vw',
-                        maxHeight: '80vh',
+                        maxHeight: '70vh',
                         overflowY: 'auto',
                         fontFamily: 'sans-serif',
                         opacity: '0',
