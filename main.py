@@ -6,7 +6,7 @@ import json
 import pandas as pd
 from PIL import Image, ImageOps
 import io
-from datetime import timedelta
+from datetime import datetime, date, timedelta
 
 # --- データベース・ストレージ接続 ---
 key_dict = json.loads(st.secrets["textkey"])
@@ -85,7 +85,7 @@ if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
 # メニュー設定
-page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
+page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "ToDoリスト📝", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- レシート撮影ページ ---
 if page == "レシート撮影📷":
@@ -247,6 +247,98 @@ elif page == "リスト管理🐇":
                 db.collection("categories").document(options[sel]).delete()
                 st.cache_data.clear()
                 st.rerun()
+
+# --- ToDoリスト ---
+elif page == "ToDoリスト📝":
+    st.header("📝 ToDoリスト")
+    
+    # 新規ToDo追加フォーム
+    with st.expander("➕ 新しいToDoを追加する", expanded=True):
+        with st.form("add_todo_form"):
+            todo_content = st.text_area("やる事の内容", placeholder="例：電気代の支払い、ゴミ出し など")
+            due_date = st.date_input("期限", value=date.today() + timedelta(days=1))
+            submit_todo = st.form_submit_button("ToDoを追加⚡", use_container_width=True)
+            
+            if submit_todo:
+                if todo_content.strip():
+                    db.collection("todos").add({
+                        "person": current_user,
+                        "content": todo_content.strip(),
+                        "due_date": due_date.strftime("%Y-%m-%d"),
+                        "created_at": firestore.SERVER_TIMESTAMP
+                    })
+                    st.success("ToDoを追加しました！")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.error("内容を入力してください！")
+
+    st.write("---")
+    st.subheader("📋 やること一覧")
+
+    # ToDo一覧の取得と表示
+    todos = get_data("todos")
+    if todos:
+        df_todos = pd.DataFrame(todos)
+        
+        # 期限のソート用変換
+        df_todos["due_date_dt"] = pd.to_datetime(df_todos["due_date"], errors="coerce")
+        df_todos = df_todos.sort_values(by="due_date_dt", ascending=True)
+
+        today = date.today()
+
+        for _, todo in df_todos.iterrows():
+            todo_id = todo["id"]
+            person = todo.get("person", "不明")
+            content = todo.get("content", "")
+            due_str = todo.get("due_date", "未設定")
+            
+            # 作成日時の整形
+            created_at_val = todo.get("created_at")
+            if created_at_val:
+                try:
+                    created_dt = pd.to_datetime(created_at_val)
+                    if created_dt.tz is None:
+                        created_dt = created_dt.tz_localize('UTC')
+                    created_dt = created_dt.tz_convert('Asia/Tokyo')
+                    created_str = created_dt.strftime("%Y/%m/%d %H:%M")
+                except Exception:
+                    created_str = "-"
+            else:
+                created_str = "-"
+
+            # 期限の残り日数判定と工夫（アラート表示）
+            due_dt = todo["due_date_dt"].date() if pd.notnull(todo["due_date_dt"]) else None
+            days_left = (due_dt - today).days if due_dt else None
+
+            if days_left is not None:
+                if days_left < 0:
+                    status_badge = f"🚨 **【期限切れ！ ({abs(days_left)}日超過)】**"
+                elif days_left == 0:
+                    status_badge = "⏰ **【今日が期限！】**"
+                elif days_left == 1:
+                    status_badge = "⚠️ **【明日が期限！】**"
+                else:
+                    status_badge = f"📅 **(あと {days_left} 日)**"
+            else:
+                status_badge = ""
+
+            # タスクカード表示
+            with st.container():
+                col_info, col_btn = st.columns([4, 1])
+                with col_info:
+                    st.markdown(f"### {content}")
+                    st.markdown(f"👤 **作成者:** {person} | 🕒 **作成日:** {created_str}")
+                    st.markdown(f"🗓️ **期限:** {due_str} {status_badge}")
+                with col_btn:
+                    if st.button("完了！(削除)✨", key=f"todo_del_{todo_id}", use_container_width=True):
+                        db.collection("todos").document(todo_id).delete()
+                        st.success("お疲れ様でした！")
+                        st.cache_data.clear()
+                        st.rerun()
+            st.divider()
+    else:
+        st.info("現在ToDoはありません！平和です🎉")
 
 # --- 月別集計・リreset ---
 elif page == "月別集計・リセット🐻":
