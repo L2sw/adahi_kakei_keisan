@@ -178,7 +178,7 @@ if not st.session_state.todo_alert_shown:
     st.session_state.todo_alert_shown = True
 
 # メニュー設定
-page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "ToDoリスト📝", "月別集計・リセット🐻", "管理者設定🍖"])
+page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "🍋ToDoリスト🍋", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- レシート撮影ページ ---
 if page == "レシート撮影📷":
@@ -342,11 +342,10 @@ elif page == "リスト管理🐇":
                 st.rerun()
 
 # --- ToDoリスト ---
-elif page == "ToDoリスト📝":
-    st.header("📝 ToDoリスト")
+elif page == "🍋ToDoリスト🍋":
 
     # ① 上部：やること一覧
-    st.subheader("📋 やること一覧")
+    st.subheader("🚑 やること一覧")
 
     # ToDo一覧の取得と表示（超コンパクト化）
     todos = get_data("todos")
