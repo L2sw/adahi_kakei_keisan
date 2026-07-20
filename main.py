@@ -7,6 +7,7 @@ import pandas as pd
 from PIL import Image, ImageOps
 import io
 from datetime import datetime, date, timedelta
+import streamlit.components.v1 as components
 
 # --- データベース・ストレージ接続 ---
 key_dict = json.loads(st.secrets["textkey"])
@@ -132,6 +133,21 @@ if not st.session_state.todo_alert_shown:
         # 期限直前（今日・明日）があればド派手注意ポップアップ
         if due_soon_list:
             st.toast(f"🔥【緊急・今日明日の期限】\n" + " / ".join(due_soon_list), icon="⏰")
+
+        if overdue_list or due_soon_list:
+            # ⏱️ JavaScriptで表示時間を7秒間（7000ms）に延長する処理
+            components.html("""
+                <script>
+                    setTimeout(function() {
+                        var toasts = window.parent.document.querySelectorAll('div[data-testid="stToast"]');
+                        toasts.forEach(function(toast) {
+                            toast.style.transition = 'opacity 0.5s ease';
+                            toast.style.opacity = '0';
+                            setTimeout(function() { toast.remove(); }, 500);
+                        });
+                    }, 7000);
+                </script>
+            """, height=0, width=0)
 
     st.session_state.todo_alert_shown = True
 
@@ -302,28 +318,8 @@ elif page == "リスト管理🐇":
 # --- ToDoリスト ---
 elif page == "ToDoリスト📝":
     st.header("📝 ToDoリスト")
-    
-    # 新規ToDo追加フォーム
-    with st.expander("➕ 新しいToDoを追加する", expanded=False):
-        with st.form("add_todo_form"):
-            c_input, c_date = st.columns([3, 1])
-            todo_content = c_input.text_input("やる事の内容", placeholder="例：電気代の支払い、ゴミ出し など")
-            due_date = c_date.date_input("期限", value=date.today() + timedelta(days=1))
-            submit_todo = st.form_submit_button("ToDoを追加⚡", use_container_width=True)
-            
-            if submit_todo:
-                if todo_content.strip():
-                    db.collection("todos").add({
-                        "person": current_user,
-                        "content": todo_content.strip(),
-                        "due_date": due_date.strftime("%Y-%m-%d")
-                    })
-                    st.success("追加完了！")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("内容を入力してください！")
 
+    # ① 上部：やること一覧
     st.subheader("📋 やること一覧")
 
     # ToDo一覧の取得と表示（超コンパクト化）
@@ -369,6 +365,29 @@ elif page == "ToDoリスト📝":
                     st.rerun()
     else:
         st.info("現在ToDoはありません！平和です🎉")
+
+    st.write("---")
+
+    # ② 下部：新規ToDo追加フォーム
+    with st.expander("➕ 新しいToDoを追加する", expanded=False):
+        with st.form("add_todo_form"):
+            c_input, c_date = st.columns([3, 1])
+            todo_content = c_input.text_input("やる事の内容", placeholder="例：電気代の支払い、ゴミ出し など")
+            due_date = c_date.date_input("期限", value=date.today() + timedelta(days=1))
+            submit_todo = st.form_submit_button("ToDoを追加⚡", use_container_width=True)
+            
+            if submit_todo:
+                if todo_content.strip():
+                    db.collection("todos").add({
+                        "person": current_user,
+                        "content": todo_content.strip(),
+                        "due_date": due_date.strftime("%Y-%m-%d")
+                    })
+                    st.success("追加完了！")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.error("内容を入力してください！")
 
 # --- 月別集計・リreset ---
 elif page == "月別集計・リセット🐻":
