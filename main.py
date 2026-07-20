@@ -177,7 +177,7 @@ if not st.session_state.todo_alert_shown:
 
     st.session_state.todo_alert_shown = True
 
-# メニュー設定（新しく「メモ帳📝」を追加）
+# メニュー設定（「メモ帳📝」を追加）
 page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "🍋ToDoリスト🍋", "メモ帳📝", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- レシート撮影ページ ---
@@ -414,81 +414,59 @@ elif page == "🍋ToDoリスト🍋":
                 else:
                     st.error("内容を入力してください！")
 
-# --- 🌟【新規追加】メモ帳ページ ---
+# --- 🌟【新規追加】シンプルメモ帳ページ ---
 elif page == "メモ帳📝":
     st.header("📝 2人だけのメモ帳")
-    st.caption(f"ログイン中: **{current_user}** | 自由に入力・共有できます！")
+    
+    # データ取得（1つのドキュメント "shared_memo" を管理）
+    memo_ref = db.collection("shared_memos").document("shared_memo")
+    memo_doc = memo_ref.get()
+    
+    current_text = ""
+    last_updated_by = "なし"
+    last_updated_at = "-"
 
-    # 新規メモ追加用フォーム
-    with st.expander("✏️ 新しいメモを作成する", expanded=True):
-        with st.form("memo_form"):
-            memo_title = st.text_input("タイトル", placeholder="例：買い物リスト、旅行の計画 など")
-            memo_content = st.text_area("本文", height=200, placeholder="ここに自由にメモを入力してください...")
-            submit_memo = st.form_submit_button("メモを保存する 💾", use_container_width=True)
-            
-            if submit_memo:
-                if memo_content.strip():
-                    db.collection("memos").add({
-                        "person": current_user,
-                        "title": memo_title.strip() if memo_title.strip() else "無題のメモ",
-                        "content": memo_content.strip(),
-                        "timestamp": firestore.SERVER_TIMESTAMP
-                    })
-                    st.success("メモを保存しました！")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("本文を入力してください！")
-
-    st.write("---")
-    st.subheader("📋 メモ一覧")
-
-    # メモ一覧の取得
-    memo_docs = db.collection("memos").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
-    memos = [{"id": doc.id, **doc.to_dict()} for doc in memo_docs]
-
-    if memos:
-        df_memos = pd.DataFrame(memos)
+    if memo_doc.exists:
+        memo_data = memo_doc.to_dict()
+        current_text = memo_data.get("content", "")
+        last_updated_by = memo_data.get("updated_by", "不明")
         
-        # タイムゾーン変換
-        timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_memos["timestamp"]]
-        df_memos["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
-        if df_memos["timestamp"].dt.tz is None:
-            df_memos["timestamp"] = df_memos["timestamp"].dt.tz_localize('UTC')
-        df_memos["timestamp"] = df_memos["timestamp"].dt.tz_convert('Asia/Tokyo')
-        df_memos["日時"] = df_memos["timestamp"].dt.strftime("%Y/%m/%d %H:%M").fillna("-")
+        # 日時フォーマット
+        ts = memo_data.get("timestamp")
+        if ts:
+            if isinstance(ts, datetime):
+                dt = ts
+            else:
+                dt = pd.to_datetime(ts)
+            
+            if dt.tzinfo is None:
+                dt = dt.tz_localize('UTC')
+            dt = dt.tz_convert('Asia/Tokyo')
+            last_updated_at = dt.strftime("%Y/%m/%d %H:%M")
 
-        for _, m in df_memos.iterrows():
-            m_id = m["id"]
-            m_title = m.get("title", "無題のメモ")
-            m_content = m.get("content", "")
-            m_person = m.get("person", "不明")
-            m_date = m.get("日時", "-")
+    st.caption(f"✍️ 最終更新: **{last_updated_by}** ({last_updated_at})")
 
-            with st.expander(f"📌 {m_title} （作成: {m_person} | {m_date}）"):
-                # メモの編集機能
-                updated_title = st.text_input("タイトル編集", value=m_title, key=f"title_{m_id}")
-                updated_content = st.text_area("本文編集", value=m_content, height=180, key=f"content_{m_id}")
-                
-                col_save, col_del = st.columns([1, 1])
-                with col_save:
-                    if st.button("更新保存 🔄", key=f"save_{m_id}", use_container_width=True):
-                        db.collection("memos").document(m_id).update({
-                            "title": updated_title.strip(),
-                            "content": updated_content.strip(),
-                            "timestamp": firestore.SERVER_TIMESTAMP
-                        })
-                        st.success("更新しました！")
-                        st.cache_data.clear()
-                        st.rerun()
-                with col_del:
-                    if st.button("削除 🗑️", key=f"del_memo_{m_id}", use_container_width=True):
-                        db.collection("memos").document(m_id).delete()
-                        st.success("削除しました！")
-                        st.cache_data.clear()
-                        st.rerun()
-    else:
-        st.info("まだ保存されたメモはありません。上のフォームから新しいメモを作ってみよう！")
+    # 自由入力できる大きなテキストエリア＆更新ボタン
+    with st.form("simple_memo_form"):
+        memo_input = st.text_area(
+            "自由記入用ノート",
+            value=current_text,
+            height=450,
+            placeholder="ここに2人で自由にメモを書いてね！\n書き終わったら下の「最新状態に更新する」を押してね✨",
+            label_visibility="collapsed"
+        )
+        
+        save_btn = st.form_submit_button("最新状態に更新する 💾", use_container_width=True)
+
+        if save_btn:
+            memo_ref.set({
+                "content": memo_input,
+                "updated_by": current_user,
+                "timestamp": firestore.SERVER_TIMESTAMP
+            })
+            st.success("メモを確定・保存したよ！✨")
+            st.cache_data.clear()
+            st.rerun()
 
 # --- 月別集計・リreset ---
 elif page == "月別集計・リセット🐻":
