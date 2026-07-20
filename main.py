@@ -55,7 +55,7 @@ def delete_image(doc_id):
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="wide")
 
-# 表示の間隔をギリギリまで詰めるためのカスタムCSS & ポップアップ（st.toast）のド派手化CSS
+# 表示の間隔をギリギリまで詰めるためのカスタムCSS & 🚨超ド派手ポップアップ（st.toast）CSS
 st.markdown("""
     <style>
         [data-testid="stExpander"] {
@@ -87,13 +87,28 @@ st.markdown("""
             font-weight: bold !important;
             border-radius: 12px !important;
             padding: 12px 20px !important;
-            white-space: pre-wrap !important; /* 改行を画面にしっかり反映 */
+            white-space: pre-wrap !important;
+            max-height: none !important; /* 省略展開時の高さ制限解除 */
         }
         div[data-testid="stToast"] p {
             font-size: 16px !important;
             color: #FFFF00 !important;
             text-shadow: 1px 1px 2px #000;
             white-space: pre-wrap !important;
+            -webkit-line-clamp: unset !important; /* 行数制限解除 */
+            max-height: none !important;
+        }
+        /* View more ボタンの強制非表示 ＆ 自動全展開 */
+        div[data-testid="stToast"] [data-testid="stExpander"] {
+            border: none !important;
+            background: transparent !important;
+        }
+        div[data-testid="stToast"] button[aria-expanded] {
+            display: none !important; /* View more ボタン自体を消す */
+        }
+        div[data-testid="stToast"] [data-testid="stExpanderDetails"] {
+            display: block !important; /* 最初から中身を全表示 */
+            padding: 0px !important;
         }
     </style>
 """, unsafe_allow_html=True)
