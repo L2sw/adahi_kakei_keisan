@@ -135,7 +135,7 @@ if not st.session_state.todo_alert_shown:
             st.toast(f"🔥【緊急・今日明日の期限】\n" + " / ".join(due_soon_list), icon="⏰")
 
         if overdue_list or due_soon_list:
-            # ⏱️ JavaScriptで表示時間を7秒間（7000ms）に延長する処理
+            # ⏱️ JavaScriptで表示時間を10秒間（10000ms）に延長する処理
             components.html("""
                 <script>
                     setTimeout(function() {
@@ -145,7 +145,7 @@ if not st.session_state.todo_alert_shown:
                             toast.style.opacity = '0';
                             setTimeout(function() { toast.remove(); }, 500);
                         });
-                    }, 7000);
+                    }, 10000);
                 </script>
             """, height=0, width=0)
 
