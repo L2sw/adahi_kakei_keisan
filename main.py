@@ -431,18 +431,15 @@ elif page == "メモ帳📝":
         current_text = memo_data.get("content", "")
         last_updated_by = memo_data.get("updated_by", "不明")
         
-        # 日時フォーマット
+        # タイムゾーン安全変換処理
         ts = memo_data.get("timestamp")
         if ts:
-            if isinstance(ts, datetime):
-                dt = ts
-            else:
-                dt = pd.to_datetime(ts)
-            
-            if dt.tzinfo is None:
-                dt = dt.tz_localize('UTC')
-            dt = dt.tz_convert('Asia/Tokyo')
-            last_updated_at = dt.strftime("%Y/%m/%d %H:%M")
+            dt = pd.to_datetime(ts, errors='coerce')
+            if dt is not pd.NaT:
+                if dt.tz is None:
+                    dt = dt.tz_localize('UTC')
+                dt = dt.tz_convert('Asia/Tokyo')
+                last_updated_at = dt.strftime("%Y/%m/%d %H:%M")
 
     st.caption(f"✍️ 最終更新: **{last_updated_by}** ({last_updated_at})")
 
