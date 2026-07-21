@@ -1,9 +1,9 @@
 import json
-from google import genai
-from google.genai import types
 from google.cloud import firestore
 from google.cloud import storage
 from google.oauth2 import service_account
+from google.generativeai import GenerativeModel
+import google.generativeai as genai
 import pandas as pd
 from PIL import Image, ImageOps
 import io
@@ -254,11 +254,11 @@ if page == "レシート撮影📷":
       if st.button("🤖 AIでレシートを解析する", use_container_width=True):
         with st.spinner("AIがレシートを解析しています...⏳"):
           try:
-            # Gemini APIクライアントの初期化（secretsからAPIキーを取得）
+            # Gemini APIの設定と初期化（google-generativeai ライブラリを使用）
             gemini_key = st.secrets.get("gemini_api_key") or st.secrets.get(
                 "API_KEY"
             )
-            client = genai.Client(api_key=gemini_key)
+            genai.configure(api_key=gemini_key)
 
             prompt = """
                     このレシート画像から、店舗名、日付、およびすべての商品の「品名」「価格（税込み）」を抽出してください。
@@ -270,9 +270,8 @@ if page == "レシート撮影📷":
                     ]
                     """
 
-            response = client.models.generate_content(
-                model="gemini-2.5-flash", contents=[prompt, preview_img]
-            )
+            model = GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content([prompt, preview_img])
 
             text_res = response.text.strip()
             if text_res.startswith("```json"):
@@ -897,7 +896,7 @@ else:
     is_re = df["is_reimburse"]
     d_r = df[(df["person"] == "大地") & (is_re)]["amount"].sum()
     d_s = df[(df["person"] == "大地") & (~is_re)]["amount"].sum()
-    h_r = df[(df["person"] == "日向子") & (is_re)]["amount"].sum()
+    h_r = df[(df["person"] == "日向子") & (is_re)]["amount5"] if False else df[(df["person"] == "日向子") & (is_re)]["amount"].sum()
     h_s = df[(df["person"] == "日向子") & (~is_re)]["amount"].sum()
 
     bal = (d_r + d_s / 2) - (h_r + h_s / 2)
