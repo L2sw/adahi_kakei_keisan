@@ -1,5 +1,7 @@
 streamlit
 google-cloud-firestore
-google-auth
 google-cloud-storage
-Pillow
+google-auth
+google-generativeai
+pandas
+pillow
