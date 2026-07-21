@@ -1,30 +1,3 @@
-ご提示いただいたStreamlitのソースコードをベースに、「レシート撮影ページ」でGoogle Gemini API（`google-genai`または`google-generativeai`ライブラリ）を使用してレシート画像を解析し、店名（場所）・品目・金額などの情報を抽出して、UI上で個別に確認・取捨選択（編集や登録のON/OFF）した上で、Firestoreの支出データ（`expenses`コレクション）へまとめて登録できる機能に修正しました。
-
----
-
-### 💡 修正のポイント
-
-1. **Gemini APIによるレシート自動解析:**
-* 撮影した画像を構造化データのスキーマ（JSON形式：店名、日付、商品の配列：品名・金額）でGeminiに読み込ませます。
-
-
-2. **プレビュー＆取捨選択UI:**
-* AIが読み取った内容を `st.data_editor` または各行のチェックボックス付きフォームで一覧表示し、ユーザーが誤認識の修正や不要な項目の除外、登録先の選択を自由に行えるようにしています。
-
-
-3. **DB一括登録:**
-* 画面でチェックを入れ、内容を確定した項目だけをワンクリックで `expenses` コレクションに書き込みます。
-
-
-
----
-
-### 🛠️ 修正・追加後のソースコード
-
-以下のコードをそのまま貼り付けてご利用いただけます。事前に `google-genai`（または `google-generativeai`）ライブラリがインストールされていること、および `st.secrets` にGemini用のAPIキー（例: `GEMINI_API_KEY`）が設定されていることをご確認ください。
-
-```python
-import streamlit as str_lit
 import streamlit as st
 from google.cloud import firestore
 from google.cloud import storage
@@ -43,7 +16,6 @@ creds = service_account.Credentials.from_service_account_info(key_dict)
 db = firestore.Client(credentials=creds)
 
 # --- Gemini APIの設定 ---
-# st.secrets["GEMINI_API_KEY"] にAPIキーを設定してください
 genai.configure(api_key=st.secrets.get("GEMINI_API_KEY", ""))
 
 # ★★★ Firebase Storageの設定 ★★★
@@ -238,7 +210,6 @@ if page == "レシート撮影📷":
         if st.button("🤖 Geminiでレシートを解析する", use_container_width=True):
             with st.spinner("レシートの情報をAIが読み取っています...⏳"):
                 try:
-                    # Geminiモデルの呼び出し (gemini-1.5-flashなどを使用)
                     model = genai.GenerativeModel('gemini-1.5-flash')
                     prompt = """
                     このレシート画像から以下の情報を抽出し、必ず純粋なJSON形式のみで返してください（マークダウンの ```json と ``` は含めないでください）。
@@ -258,7 +229,6 @@ if page == "レシート撮影📷":
                     
                     st.session_state.gemini_place = parsed_data.get("place", "")
                     
-                    # 取捨選択・編集用のデータフレーム作成
                     extracted_list = []
                     for row in parsed_data.get("items", []):
                         extracted_list.append({
@@ -278,7 +248,6 @@ if page == "レシート撮影📷":
         st.subheader("🛒 解析された項目の確認・取捨選択")
         st.write("不要な項目のチェックを外すか、内容を直接編集してから登録ボタンを押してください。")
         
-        # データエディタで直接修正・選択可能にする
         edited_df = st.data_editor(
             st.session_state.gemini_items,
             column_config={
@@ -296,7 +265,6 @@ if page == "レシート撮影📷":
         with col_save:
             if st.button("選択した項目を台帳に登録する💾", use_container_width=True):
                 with st.spinner("データを保存中...⏳"):
-                    # 画像本体も同時にFirebase Storageに保存
                     doc_ref = db.collection("receipt_images").add({
                         "person": current_user,
                         "timestamp": firestore.SERVER_TIMESTAMP,
@@ -304,18 +272,13 @@ if page == "レシート撮影📷":
                     })
                     doc_id = doc_ref[1].id
                     
-                    # 再度ファイルポインタをリセットするか、一時保持したファイルを使うため画像再取得等の考慮が必要だが
-                    # Streamlitのfile_uploaderは再読込で消え得るため、セッション等に保持している場合は注意。
-                    # ここでは簡易的にアップロード処理を実施
                     try:
-                        # img_fileが有効な場合のアップロード
                         img_file.seek(0)
                         image_url = upload_image(img_file, doc_id)
                         doc_ref[1].update({"image_url": image_url})
                     except Exception:
-                        pass # 画像保存に失敗してもexpensesの登録は継続できるようにする
+                        pass
 
-                    # チェックが入っているものだけをexpensesに登録
                     registered_count = 0
                     for _, row in edited_df.iterrows():
                         if row["登録"] and row["金額"] > 0:
@@ -344,7 +307,6 @@ if page == "レシート撮影📷":
 
     st.write("---")
     
-    # ログイン中のユーザーに応じた「自分のレシート全削除機能」
     st.subheader(f"🥎レシート一括削除")
     st.write(f"自分が撮影したレシートのみをすべて削除できるよ蜥")
     
@@ -365,7 +327,6 @@ if page == "レシート撮影📷":
             st.cache_data.clear()
             st.rerun()
 
-    # 保存された画像の取得と一覧表示
     receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
     receipts = [{"id": doc.id, **doc.to_dict()} for doc in receipt_docs]
     
@@ -719,5 +680,3 @@ else:
                             db.collection("expenses").document(opts[sel]).delete()
                             st.cache_data.clear(); st.rerun()
         show(c1, "大地"); show(c2, "日向子")
-
-```
