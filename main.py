@@ -366,7 +366,7 @@ else:
      
     if "place_sel" not in st.session_state: st.session_state.place_sel = ""
 
-    with st.expander("🐔直接手入力で記録する", expanded=True):
+    with st.expander("🐔直接手入力で記録する", expanded=False):
         c1, c2 = st.columns(2)
         st.session_state.place_sel = c1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()), 
                                                   label_visibility="collapsed", placeholder="場所選択🐎")
