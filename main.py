@@ -103,234 +103,11 @@ user_code = params.get("user")
 if isinstance(user_code, list): user_code = user_code[0]
 current_user = "大地" if user_code == "h" else "日向子"
 
-# メニュー設定
-page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "レシート撮影📷", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
-
-# --- レシート撮影ページ ---
-if page == "レシート撮影📷":
-    st.header("📸 レシート解析・撮影📷")
-    
-    if "uploader_key" not in st.session_state:
-        st.session_state.uploader_key = 0
-    if "gemini_items" not in st.session_state:
-        st.session_state.gemini_items = None
-    if "gemini_place" not in st.session_state:
-        st.session_state.gemini_place = ""
-    if "current_image_bytes" not in st.session_state:
-        st.session_state.current_image_bytes = None
-
-    img_file = st.file_uploader(
-        "ここをタップしてレシートを撮影 📸", 
-        type=["jpg", "jpeg", "png"],
-        label_visibility="collapsed",
-        key=f"receipt_uploader_{st.session_state.uploader_key}"
-    )
-    
-    if img_file is not None:
-        st.session_state.current_image_bytes = img_file.getvalue()
-        
-        preview_img = Image.open(io.BytesIO(st.session_state.current_image_bytes))
-        preview_img = ImageOps.exif_transpose(preview_img)
-        
-        st.image(preview_img, caption="選択されたレシート", use_column_width=True)
-        
-        # 解析ボタン
-        if st.button("🤖 Geminiでレシートを解析する", use_container_width=True):
-            with st.spinner("レシートの情報をAIが読み取っています...⏳"):
-                try:
-                    model = genai.GenerativeModel('gemini-3.5-flash-lite')
-                    prompt = """
-                    このレシート画像から以下の情報を抽出し、必ず純粋なJSON形式のみで返してください（マークダウンの ```json と ``` は含めないでください）。
-                    {
-                      "place": "店名（不明な場合は空文字）",
-                      "items": [
-                        {
-                          "item": "商品名",
-                          "amount": 金額（整数）
-                        }
-                      ]
-                    }
-                    """
-                    response = model.generate_content([prompt, preview_img])
-                    cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
-                    parsed_data = json.loads(cleaned_text)
-                    
-                    st.session_state.gemini_place = parsed_data.get("place", "")
-                    
-                    extracted_list = []
-                    for row in parsed_data.get("items", []):
-                        extracted_list.append({
-                            "登録": True,
-                            "場所": st.session_state.gemini_place,
-                            "品目": row.get("item", ""),
-                            "金額": int(row.get("amount", 0)),
-                            "全立替": False
-                        })
-                    st.session_state.gemini_items = pd.DataFrame(extracted_list)
-                    st.success("解析が完了しました！下のフォームで内容を確認・編集して登録してください。")
-                except Exception as e:
-                    st.error(f"解析に失敗しました: {e}")
-
-    # 解析結果の編集・取捨選択UI
-    if st.session_state.gemini_items is not None and not st.session_state.gemini_items.empty:
-        st.subheader("🛒 解析された項目の確認・取捨選択")
-        st.write("不要な項目のチェックを外すか、内容を直接編集してから登録ボタンを押してください。")
-        
-        edited_df = st.data_editor(
-            st.session_state.gemini_items,
-            column_config={
-                "登録": st.column_config.CheckboxColumn("登録", default=True),
-                "場所": st.column_config.TextColumn("場所（店名）"),
-                "品目": st.column_config.TextColumn("品名"),
-                "金額": st.column_config.NumberColumn("金額 (円)", format="%d円"),
-                "全立替": st.column_config.CheckboxColumn("全立替", default=False)
-            },
-            hide_index=True,
-            use_container_width=True
-        )
-        
-        col_save, col_clear = st.columns(2)
-        with col_save:
-            if st.button("選択した項目を台帳に登録する💾", use_container_width=True):
-                with st.spinner("ストレージへの保存と台帳登録を実行中...⏳"):
-                    image_url = ""
-                    doc_id = ""
-                    
-                    # 1. Firestoreにレシート画像のドキュメントを作成
-                    try:
-                        doc_ref = db.collection("receipt_images").add({
-                            "person": current_user,
-                            "timestamp": firestore.SERVER_TIMESTAMP,
-                            "image_url": ""
-                        })
-                        doc_id = doc_ref[1].id
-                    except Exception as e:
-                        st.error(f"Firestoreへのデータ作成エラー: {e}")
-
-                    # 2. Firebase Storageへの画像アップロード
-                    if doc_id and st.session_state.current_image_bytes:
-                        try:
-                            image_url = upload_image(st.session_state.current_image_bytes, doc_id)
-                            db.collection("receipt_images").document(doc_id).update({"image_url": image_url})
-                        except Exception as e:
-                            st.error(f"🚨 画像のストレージ保存エラー: {e}")
-
-                    # 3. 台帳（expenses）へ品目を一括登録
-                    registered_count = 0
-                    for _, row in edited_df.iterrows():
-                        if row["登録"] and row["金額"] > 0:
-                            db.collection("expenses").add({
-                                "person": current_user,
-                                "place": row["場所"] if row["場所"] else "不明",
-                                "item": row["品目"] if row["品目"] else "不明",
-                                "amount": int(row["金額"]),
-                                "is_reimburse": bool(row["全立替"]),
-                                "timestamp": firestore.SERVER_TIMESTAMP,
-                                "is_archived": False
-                            })
-                            registered_count += 1
-                    
-                    st.success(f"台帳に{registered_count}件登録しました！")
-                    
-                    # リセット処理
-                    st.session_state.gemini_items = None
-                    st.session_state.current_image_bytes = None
-                    st.session_state.uploader_key += 1
-                    st.cache_data.clear()
-                    st.rerun()
-                    
-        with col_clear:
-            if st.button("解析をやり直す（破棄）", use_container_width=True):
-                st.session_state.gemini_items = None
-                st.session_state.current_image_bytes = None
-                st.session_state.uploader_key += 1
-                st.rerun()
-
-    st.write("---")
-    
-    st.subheader(f"🥎レシート一括削除")
-    st.write(f"自分が撮影したレシートのみをすべて削除できるよ蜥")
-    
-    confirm_all_del = st.checkbox(f"🚙本当に【{current_user}】のレシートを全削除する？栗")
-    if st.button(f"🚨 {current_user}のを全削除する", use_container_width=True, disabled=not confirm_all_del):
-        with st.spinner(f"{current_user}のデータを一括削除中...⏳"):
-            my_receipts = db.collection("receipt_images").where("person", "==", current_user).stream()
-            deleted_count = 0
-            for doc in my_receipts:
-                delete_image(doc.id)
-                doc.reference.delete()
-                deleted_count += 1
-            
-            if deleted_count > 0:
-                st.success(f"{deleted_count}件のレシートをすべて削除したよ！")
-            else:
-                st.info("削除するレシートがありませんでした。")
-            st.cache_data.clear()
-            st.rerun()
-
-    receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
-    receipts = [{"id": doc.id, **doc.to_dict()} for doc in receipt_docs]
-    
-    if receipts:
-        df_receipts = pd.DataFrame(receipts)
-        timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_receipts["timestamp"]]
-        df_receipts["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
-        if df_receipts["timestamp"].dt.tz is None:
-            df_receipts["timestamp"] = df_receipts["timestamp"].dt.tz_localize('UTC')
-        df_receipts["timestamp"] = df_receipts["timestamp"].dt.tz_convert('Asia/Tokyo')
-        df_receipts["日時"] = df_receipts["timestamp"].dt.strftime("%Y/%m/%d %H:%M").fillna("-")
-        
-        df_daichi = df_receipts[df_receipts["person"] == "大地"]
-        df_hinako = df_receipts[df_receipts["person"] == "日向子"]
-        
-        col_d, col_h = st.columns(2)
-        
-        with col_d:
-            st.markdown("### 🐄大地レシート")
-            if not df_daichi.empty:
-                for _, r in df_daichi.iterrows():
-                    label = f"🐔 {r['日時']}"
-                    with st.expander(label):
-                        url = r.get("image_url")
-                        if url:
-                            st.image(url, caption=f"撮影日: {r['日時']}", use_column_width=True)
-                            if st.button("🐛削除", key=f"del_{r['id']}"):
-                                with st.spinner("削除中...⏳"):
-                                    delete_image(r["id"])
-                                    db.collection("receipt_images").document(r["id"]).delete()
-                                    st.success("削除したよ")
-                                    st.cache_data.clear()
-                                    st.rerun()
-                        else:
-                            st.info("画像URLがありません。")
-            else:
-                st.info("✏大地のパシャlogはないよ")
-                
-        with col_h:
-            st.markdown("### 🐇日向子レシート")
-            if not df_hinako.empty:
-                for _, r in df_hinako.iterrows():
-                    label = f"🐥 {r['日時']}"
-                    with st.expander(label):
-                        url = r.get("image_url")
-                        if url:
-                            st.image(url, caption=f"撮影日: {r['日時']}", use_column_width=True)
-                            if st.button("🐼削除", key=f"del_{r['id']}"):
-                                with st.spinner("削除中...⏳"):
-                                    delete_image(r["id"])
-                                    db.collection("receipt_images").document(r["id"]).delete()
-                                    st.success("削除したよ☄")
-                                    st.cache_data.clear()
-                                    st.rerun()
-                        else:
-                            st.info("画像URLがありません。")
-            else:
-                st.info("💗日向子のパシャlogはないよ")
-    else:
-        st.info("まだ保存されたレシートはありません。")
+# メニュー設定（レシート撮影メニューを統合したためシンプル化）
+page = st.sidebar.radio("🐭🐄🐯🐍 メメニュー 🐏🐗🐒🐩", ["台帳入力🐶", "リスト管理🐇", "月別集計・リセット🐻", "管理者設定🍖"])
 
 # --- リスト管理 ---
-elif page == "リスト管理🐇":
+if page == "リスト管理🐇":
     st.header("🐖 リスト管理")
     if "last_place" not in st.session_state: st.session_state.last_place = ""
     with st.form("list_form"):
@@ -438,15 +215,159 @@ elif page == "管理者設定🍖":
     else:
         st.info("両名が同意し、チェックボックスをオンにするとボタンが有効になります。")
 
-# --- 家計簿入力 (台帳入力) ---
+# --- 家計簿入力 (台帳入力メインページ) ---
 else:
     st.markdown("## 🐘 2人だけの台帳")
+
+    # ==========================================
+    # 1. 最上部：レシート撮影・AI解析機能
+    # ==========================================
+    with st.expander("📸 レシートを撮影してAIで自動入力する", expanded=False):
+        if "uploader_key" not in st.session_state:
+            st.session_state.uploader_key = 0
+        if "gemini_items" not in st.session_state:
+            st.session_state.gemini_items = None
+        if "gemini_place" not in st.session_state:
+            st.session_state.gemini_place = ""
+        if "current_image_bytes" not in st.session_state:
+            st.session_state.current_image_bytes = None
+
+        img_file = st.file_uploader(
+            "ここをタップしてレシートを撮影 📸", 
+            type=["jpg", "jpeg", "png"],
+            label_visibility="collapsed",
+            key=f"receipt_uploader_{st.session_state.uploader_key}"
+        )
+        
+        if img_file is not None:
+            st.session_state.current_image_bytes = img_file.getvalue()
+            
+            preview_img = Image.open(io.BytesIO(st.session_state.current_image_bytes))
+            preview_img = ImageOps.exif_transpose(preview_img)
+            
+            st.image(preview_img, caption="選択されたレシート", use_column_width=True)
+            
+            # 解析ボタン
+            if st.button("🤖 Geminiでレシートを解析する", use_container_width=True):
+                with st.spinner("レシートの情報をAIが読み取っています...⏳"):
+                    try:
+                        model = genai.GenerativeModel('gemini-3.5-flash-lite')
+                        prompt = """
+                        このレシート画像から以下の情報を抽出し、必ず純粋なJSON形式のみで返してください（マークダウンの ```json と ``` は含めないでください）。
+                        {
+                          "place": "店名（不明な場合は空文字）",
+                          "items": [
+                            {
+                              "item": "商品名",
+                              "amount": 金額（整数）
+                            }
+                          ]
+                        }
+                        """
+                        response = model.generate_content([prompt, preview_img])
+                        cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
+                        parsed_data = json.loads(cleaned_text)
+                        
+                        st.session_state.gemini_place = parsed_data.get("place", "")
+                        
+                        extracted_list = []
+                        for row in parsed_data.get("items", []):
+                            extracted_list.append({
+                                "登録": True,
+                                "場所": st.session_state.gemini_place,
+                                "品目": row.get("item", ""),
+                                "金額": int(row.get("amount", 0)),
+                                "全立替": False
+                            })
+                        st.session_state.gemini_items = pd.DataFrame(extracted_list)
+                        st.success("解析が完了しました！下のフォームで内容を確認・編集して登録してください。")
+                    except Exception as e:
+                        st.error(f"解析に失敗しました: {e}")
+
+        # 解析結果の編集・取捨選択UI
+        if st.session_state.gemini_items is not None and not st.session_state.gemini_items.empty:
+            st.subheader("🛒 解析された項目の確認・取捨選択")
+            st.write("不要な項目のチェックを外すか、内容を直接編集してから登録ボタンを押してください。")
+            
+            edited_df = st.data_editor(
+                st.session_state.gemini_items,
+                column_config={
+                    "登録": st.column_config.CheckboxColumn("登録", default=True),
+                    "場所": st.column_config.TextColumn("場所（店名）"),
+                    "品目": st.column_config.TextColumn("品名"),
+                    "金額": st.column_config.NumberColumn("金額 (円)", format="%d円"),
+                    "全立替": st.column_config.CheckboxColumn("全立替", default=False)
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+            
+            col_save, col_clear = st.columns(2)
+            with col_save:
+                if st.button("選択した項目を台帳に登録する💾", use_container_width=True):
+                    with st.spinner("ストレージへの保存と台帳登録を実行中...⏳"):
+                        image_url = ""
+                        doc_id = ""
+                        
+                        # 1. Firestoreにレシート画像のドキュメントを作成
+                        try:
+                            doc_ref = db.collection("receipt_images").add({
+                                "person": current_user,
+                                "timestamp": firestore.SERVER_TIMESTAMP,
+                                "image_url": ""
+                            })
+                            doc_id = doc_ref[1].id
+                        except Exception as e:
+                            st.error(f"Firestoreへのデータ作成エラー: {e}")
+
+                        # 2. Firebase Storageへの画像アップロード
+                        if doc_id and st.session_state.current_image_bytes:
+                            try:
+                                image_url = upload_image(st.session_state.current_image_bytes, doc_id)
+                                db.collection("receipt_images").document(doc_id).update({"image_url": image_url})
+                            except Exception as e:
+                                st.error(f"🚨 画像のストレージ保存エラー: {e}")
+
+                        # 3. 台帳（expenses）へ品目を一括登録
+                        registered_count = 0
+                        for _, row in edited_df.iterrows():
+                            if row["登録"] and row["金額"] > 0:
+                                db.collection("expenses").add({
+                                    "person": current_user,
+                                    "place": row["場所"] if row["場所"] else "不明",
+                                    "item": row["品目"] if row["品目"] else "不明",
+                                    "amount": int(row["金額"]),
+                                    "is_reimburse": bool(row["全立替"]),
+                                    "timestamp": firestore.SERVER_TIMESTAMP,
+                                    "is_archived": False
+                                })
+                                registered_count += 1
+                        
+                        st.success(f"台帳に{registered_count}件登録しました！")
+                        
+                        # リセット処理
+                        st.session_state.gemini_items = None
+                        st.session_state.current_image_bytes = None
+                        st.session_state.uploader_key += 1
+                        st.cache_data.clear()
+                        st.rerun()
+                        
+            with col_clear:
+                if st.button("解析をやり直す（破棄）", use_container_width=True):
+                    st.session_state.gemini_items = None
+                    st.session_state.current_image_bytes = None
+                    st.session_state.uploader_key += 1
+                    st.rerun()
+
+    # ==========================================
+    # 2. 中央：手動入力・精算計算・支出ログ
+    # ==========================================
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
      
     if "place_sel" not in st.session_state: st.session_state.place_sel = ""
 
-    with st.expander("🐔記録する", expanded=True):
+    with st.expander("🐔直接手入力で記録する", expanded=True):
         c1, c2 = st.columns(2)
         st.session_state.place_sel = c1.selectbox("場所選択", [""] + sorted(df_cats["place"].unique().tolist()), 
                                                   label_visibility="collapsed", placeholder="場所選択🐎")
@@ -510,3 +431,89 @@ else:
                             db.collection("expenses").document(opts[sel]).delete()
                             st.cache_data.clear(); st.rerun()
         show(c1, "大地"); show(c2, "日向子")
+
+    # ==========================================
+    # 3. 最下部：お互いのレシート一覧＆削除機能
+    # ==========================================
+    st.write("---")
+    st.header("📸 撮影済みレシート一覧")
+
+    receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
+    receipts = [{"id": doc.id, **doc.to_dict()} for doc in receipt_docs]
+    
+    if receipts:
+        df_receipts = pd.DataFrame(receipts)
+        timestamps = [d.get("timestamp") if isinstance(d, dict) else d for d in df_receipts["timestamp"]]
+        df_receipts["timestamp"] = pd.to_datetime(timestamps, errors='coerce')
+        if df_receipts["timestamp"].dt.tz is None:
+            df_receipts["timestamp"] = df_receipts["timestamp"].dt.tz_localize('UTC')
+        df_receipts["timestamp"] = df_receipts["timestamp"].dt.tz_convert('Asia/Tokyo')
+        df_receipts["日時"] = df_receipts["timestamp"].dt.strftime("%Y/%m/%d %H:%M").fillna("-")
+        
+        df_daichi = df_receipts[df_receipts["person"] == "大地"]
+        df_hinako = df_receipts[df_receipts["person"] == "日向子"]
+        
+        col_d, col_h = st.columns(2)
+        
+        with col_d:
+            st.markdown("### 🐄大地レシート")
+            if not df_daichi.empty:
+                for _, r in df_daichi.iterrows():
+                    label = f"🐔 {r['日時']}"
+                    with st.expander(label):
+                        url = r.get("image_url")
+                        if url:
+                            st.image(url, caption=f"撮影日: {r['日時']}", use_column_width=True)
+                            if st.button("🐛削除", key=f"del_rec_{r['id']}"):
+                                with st.spinner("削除中...⏳"):
+                                    delete_image(r["id"])
+                                    db.collection("receipt_images").document(r["id"]).delete()
+                                    st.success("削除したよ")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                        else:
+                            st.info("画像URLがありません。")
+            else:
+                st.info("✏大地のパシャlogはないよ")
+                
+        with col_h:
+            st.markdown("### 🐇日向子レシート")
+            if not df_hinako.empty:
+                for _, r in df_hinako.iterrows():
+                    label = f"🐥 {r['日時']}"
+                    with st.expander(label):
+                        url = r.get("image_url")
+                        if url:
+                            st.image(url, caption=f"撮影日: {r['日時']}", use_column_width=True)
+                            if st.button("🐼削除", key=f"del_rec_{r['id']}"):
+                                with st.spinner("削除中...⏳"):
+                                    delete_image(r["id"])
+                                    db.collection("receipt_images").document(r["id"]).delete()
+                                    st.success("削除したよ☄")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                        else:
+                            st.info("画像URLがありません。")
+            else:
+                st.info("💗日向子のパシャlogはないよ")
+
+        st.write("---")
+        with st.expander(f"🚨 【{current_user}】のレシートを一括削除する"):
+            confirm_all_del = st.checkbox(f"本当に自分のレシートを全削除する？")
+            if st.button(f"全削除を実行", use_container_width=True, disabled=not confirm_all_del):
+                with st.spinner(f"{current_user}のデータを一括削除中...⏳"):
+                    my_receipts = db.collection("receipt_images").where("person", "==", current_user).stream()
+                    deleted_count = 0
+                    for doc in my_receipts:
+                        delete_image(doc.id)
+                        doc.reference.delete()
+                        deleted_count += 1
+                    
+                    if deleted_count > 0:
+                        st.success(f"{deleted_count}件のレシートをすべて削除したよ！")
+                    else:
+                        st.info("削除するレシートがありませんでした。")
+                    st.cache_data.clear()
+                    st.rerun()
+    else:
+        st.info("まだ保存されたレシートはありません。")
