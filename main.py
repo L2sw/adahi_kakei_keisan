@@ -210,7 +210,7 @@ if page == "レシート撮影📷":
         if st.button("🤖 Geminiでレシートを解析する", use_container_width=True):
             with st.spinner("レシートの情報をAIが読み取っています...⏳"):
                 try:
-                    model = genai.GenerativeModel('gemini-3.5-flash')
+                    model = genai.GenerativeModel('gemini-3.6-flash')
                     prompt = """
                     このレシート画像から以下の情報を抽出し、必ず純粋なJSON形式のみで返してください（マークダウンの ```json と ``` は含めないでください）。
                     {
