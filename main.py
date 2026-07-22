@@ -210,7 +210,13 @@ if page == "レシート撮影📷":
         if st.button("🤖 Geminiでレシートを解析する", use_container_width=True):
             with st.spinner("レシートの情報をAIが読み取っています...⏳"):
                 try:
-                    model = genai.GenerativeModel('gemini-2.5-flash')
+                    # ★ Gemini 3.5 Flash-Lite を指定
+                    model = genai.GenerativeModel('gemini-3.5-flash-lite')
+                    
+                    # 送信用画像をリサイズして転送速度と解析速度をさらに向上
+                    ai_img = preview_img.copy()
+                    ai_img.thumbnail((1024, 1024))
+                    
                     prompt = """
                     このレシート画像から以下の情報を抽出し、必ず純粋なJSON形式のみで返してください（マークダウンの ```json と ``` は含めないでください）。
                     {
@@ -223,7 +229,7 @@ if page == "レシート撮影📷":
                       ]
                     }
                     """
-                    response = model.generate_content([prompt, preview_img])
+                    response = model.generate_content([prompt, ai_img])
                     cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
                     parsed_data = json.loads(cleaned_text)
                     
@@ -638,7 +644,13 @@ else:
             if st.button("🤖 Geminiでレシートを解析する", use_container_width=True):
                 with st.spinner("レシートの情報をAIが読み取っています...⏳"):
                     try:
-                        model = genai.GenerativeModel('gemini-3.5-flash')
+                        # ★ Gemini 3.5 Flash-Lite を指定
+                        model = genai.GenerativeModel('gemini-3.5-flash-lite')
+                        
+                        # 送信用画像をリサイズして転送速度と解析速度をさらに向上
+                        ai_img = preview_img.copy()
+                        ai_img.thumbnail((1024, 1024))
+                        
                         prompt = """
                         このレシート画像から以下の情報を抽出し、必ず純粋なJSON形式のみで返してください（マークダウンの ```json と ``` は含めないでください）。
                         {
@@ -651,7 +663,7 @@ else:
                           ]
                         }
                         """
-                        response = model.generate_content([prompt, preview_img])
+                        response = model.generate_content([prompt, ai_img])
                         cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
                         parsed_data = json.loads(cleaned_text)
                         
@@ -752,7 +764,7 @@ else:
         sel_i = c2.selectbox("品目選択", [""] + available_items, label_visibility="collapsed", placeholder="品選択🍳")
          
         c3, c4 = st.columns(2)
-        txt_p = c3.text_input("場所(直接入力)", label_visibility="collapsed", placeholder="場所(直入力)🥄")
+        txt_p = c3.text_input("場所(直接入力)", label_visibility="collapsed", placeholder="場所(直入力)匙")
         txt_i = c4.text_input("品目(直接入力)", label_visibility="collapsed", placeholder="品(直入力)🥬")
          
         c5, c6 = st.columns([2, 1])
