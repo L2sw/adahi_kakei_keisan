@@ -30,9 +30,9 @@ def get_data(collection):
     return [{"id": doc.id, **doc.to_dict()} for doc in docs]
 
 # --- 画像処理用の関数 ---
-def upload_image(image_file, doc_id):
+def upload_image(image_bytes, doc_id):
     """スマホ純正の超高画質を維持し、かつ縦横の回転を正しく補正してFirebaseに保存する"""
-    img = Image.open(image_file)
+    img = Image.open(io.BytesIO(image_bytes))
     img = ImageOps.exif_transpose(img)
     img.thumbnail((3000, 3000))
     
@@ -105,6 +105,8 @@ if page == "レシート撮影📷":
         st.session_state.gemini_items = None
     if "gemini_place" not in st.session_state:
         st.session_state.gemini_place = ""
+    if "current_image_bytes" not in st.session_state:
+        st.session_state.current_image_bytes = None
 
     img_file = st.file_uploader(
         "ここをタップしてレシートを撮影 📸", 
@@ -114,7 +116,10 @@ if page == "レシート撮影📷":
     )
     
     if img_file is not None:
-        preview_img = Image.open(img_file)
+        # アップロードされた画像をバイト列としてセッション状態に保持
+        st.session_state.current_image_bytes = img_file.getvalue()
+        
+        preview_img = Image.open(io.BytesIO(st.session_state.current_image_bytes))
         preview_img = ImageOps.exif_transpose(preview_img)
         
         st.image(preview_img, caption="選択されたレシート", use_container_width=True)
@@ -177,7 +182,8 @@ if page == "レシート撮影📷":
         col_save, col_clear = st.columns(2)
         with col_save:
             if st.button("選択した項目を台帳に登録する💾", use_container_width=True):
-                with st.spinner("データを保存中...⏳"):
+                with st.spinner("ストレージへの保存と台帳登録を実行中...⏳"):
+                    # 1. 画像メタデータをFirestoreに初期作成
                     doc_ref = db.collection("receipt_images").add({
                         "person": current_user,
                         "timestamp": firestore.SERVER_TIMESTAMP,
@@ -185,13 +191,15 @@ if page == "レシート撮影📷":
                     })
                     doc_id = doc_ref[1].id
                     
-                    try:
-                        img_file.seek(0)
-                        image_url = upload_image(img_file, doc_id)
-                        doc_ref[1].update({"image_url": image_url})
-                    except Exception:
-                        pass
+                    # 2. Firebase Storageへ画像をアプロードしてURLを保持
+                    if st.session_state.current_image_bytes:
+                        try:
+                            image_url = upload_image(st.session_state.current_image_bytes, doc_id)
+                            doc_ref[1].update({"image_url": image_url})
+                        except Exception as e:
+                            st.error(f"画像のストレージ保存に失敗しました: {e}")
 
+                    # 3. 選択された明細項目をFirestore（expenses）に一括追加
                     registered_count = 0
                     for _, row in edited_df.iterrows():
                         if row["登録"] and row["金額"] > 0:
@@ -206,8 +214,11 @@ if page == "レシート撮影📷":
                             })
                             registered_count += 1
                     
-                    st.success(f"{registered_count}件の項目を台帳に登録しました！")
+                    st.success(f"ストレージへの画像保存と{registered_count}件の台帳登録が完了しました！")
+                    
+                    # セッション状態をクリア
                     st.session_state.gemini_items = None
+                    st.session_state.current_image_bytes = None
                     st.session_state.uploader_key += 1
                     st.cache_data.clear()
                     st.rerun()
@@ -215,6 +226,7 @@ if page == "レシート撮影📷":
         with col_clear:
             if st.button("解析をやり直す（破棄）", use_container_width=True):
                 st.session_state.gemini_items = None
+                st.session_state.current_image_bytes = None
                 st.session_state.uploader_key += 1
                 st.rerun()
 
