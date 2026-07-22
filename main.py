@@ -219,7 +219,7 @@ elif page == "管理者設定🍖":
 else:
 
     # ==========================================
-    # 1. 最上部：レシート撮影・AI解析機能
+    # 1. 最上部：レシート撮影・AI解析機能 (高速化適用)
     # ==========================================
     with st.expander("撮影してAIで自動入力🍞", expanded=False):
         if "uploader_key" not in st.session_state:
@@ -250,22 +250,42 @@ else:
             if st.button("🤖 Geminiでレシートを解析する", use_container_width=True):
                 with st.spinner("レシートの情報をAIが読み取っています...⏳"):
                     try:
+                        # ⚡【高速化 1】画像を長辺1024pxにリサイズ＆軽量化してAPI転送速度を向上
+                        fast_img = preview_img.copy()
+                        fast_img.thumbnail((1024, 1024))
+                        if fast_img.mode != 'RGB':
+                            fast_img = fast_img.convert('RGB')
+                        
+                        img_byte_arr = io.BytesIO()
+                        fast_img.save(img_byte_arr, format='JPEG', quality=75)
+                        compressed_image = Image.open(img_byte_arr)
+
                         model = genai.GenerativeModel('gemini-3.5-flash-lite')
+                        
+                        # ⚡【高速化 2】英語ベースの簡略化したプロンプトでトークン数を削減
                         prompt = """
-                        このレシート画像から以下の情報を抽出し、必ず純粋なJSON形式のみで返してください（マークダウンの ```json と ``` は含めないでください）。
+                        Extract store name and purchased items from receipt image.
+                        Return ONLY JSON format:
                         {
-                          "place": "店名（不明な場合は空文字）",
+                          "place": "Store Name",
                           "items": [
-                            {
-                              "item": "商品名",
-                              "amount": 金額（整数）
-                            }
+                            {"item": "Item Name", "amount": 1000}
                           ]
                         }
                         """
-                        response = model.generate_content([prompt, preview_img])
-                        cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
-                        parsed_data = json.loads(cleaned_text)
+                        
+                        # ⚡【高速化 3】JSONダイレクト出力モードの指定
+                        config = genai.GenerationConfig(
+                            response_mime_type="application/json",
+                            temperature=0.1
+                        )
+                        
+                        response = model.generate_content(
+                            [prompt, compressed_image],
+                            generation_config=config
+                        )
+                        
+                        parsed_data = json.loads(response.text)
                         
                         st.session_state.gemini_place = parsed_data.get("place", "")
                         
@@ -319,7 +339,7 @@ else:
                         except Exception as e:
                             st.error(f"Firestoreへのデータ作成エラー: {e}")
 
-                        # 2. Firebase Storageへの画像アップロード
+                        # 2. Firebase Storageへの画像アップロード（元の解像度の画像データを保存）
                         if doc_id and st.session_state.current_image_bytes:
                             try:
                                 image_url = upload_image(st.session_state.current_image_bytes, doc_id)
