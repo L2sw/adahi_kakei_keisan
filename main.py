@@ -221,7 +221,7 @@ else:
     # ==========================================
     # 1. 最上部：レシート撮影・AI解析機能
     # ==========================================
-    with st.expander("📸 レシートを撮影してAIで自動入力する", expanded=False):
+    with st.expander("撮影してAIで自動入力🍞", expanded=False):
         if "uploader_key" not in st.session_state:
             st.session_state.uploader_key = 0
         if "gemini_items" not in st.session_state:
@@ -434,8 +434,6 @@ else:
     # ==========================================
     # 3. 最下部：お互いのレシート一覧＆削除機能
     # ==========================================
-    st.write("---")
-    st.header("📸 撮影済みレシート一覧")
 
     receipt_docs = db.collection("receipt_images").order_by("timestamp", direction=firestore.Query.DESCENDING).stream()
     receipts = [{"id": doc.id, **doc.to_dict()} for doc in receipt_docs]
