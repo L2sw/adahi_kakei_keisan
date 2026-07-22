@@ -7,6 +7,7 @@ import pandas as pd
 from PIL import Image, ImageOps
 import io
 from datetime import datetime, date, timedelta
+import urllib.parse
 import streamlit.components.v1 as components
 import google.generativeai as genai
 
@@ -31,25 +32,35 @@ def get_data(collection):
 
 # --- 画像処理用の関数 ---
 def upload_image(image_bytes, doc_id):
-    """スマホ純正の超高画質を維持し、かつ縦横の回転を正しく補正してFirebaseに保存する"""
+    """スマホ撮影の回転補正を行い、Firebase Storageに保存して表示用URLを返す"""
     img = Image.open(io.BytesIO(image_bytes))
-    img = ImageOps.exif_transpose(img)
-    img.thumbnail((3000, 3000))
+    img = ImageOps.exif_transpose(img)  # スマホ撮影の向き補正
     
+    # RGBA等の画像をRGBに変換（JPEG保存エラー防止）
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
+        
     output = io.BytesIO()
-    img.save(output, format="JPEG", quality=98)
+    img.save(output, format="JPEG", quality=90)
     output.seek(0)
     
-    blob = bucket.blob(f"receipts/{doc_id}.jpg")
+    file_path = f"receipts/{doc_id}.jpg"
+    blob = bucket.blob(file_path)
     blob.upload_from_file(output, content_type="image/jpeg")
     
-    return blob.generate_signed_url(version="v4", expiration=timedelta(days=7), method="GET")
+    # Firebase Storageの標準直接ダウンロードURL形式を生成
+    encoded_path = urllib.parse.quote(file_path, safe='')
+    public_url = f"https://firebasestorage.googleapis.com/v0/b/{BUCKET_NAME}/o/{encoded_path}?alt=media"
+    return public_url
 
 def delete_image(doc_id):
     """Firebase Storage上の画像を削除する"""
-    blob = bucket.blob(f"receipts/{doc_id}.jpg")
-    if blob.exists():
-        blob.delete()
+    try:
+        blob = bucket.blob(f"receipts/{doc_id}.jpg")
+        if blob.exists():
+            blob.delete()
+    except Exception as e:
+        print(f"画像削除エラー: {e}")
 
 # --- ページ設定 ---
 st.set_page_config(page_title="2人だけの台帳", page_icon="🦈", layout="wide")
@@ -116,13 +127,12 @@ if page == "レシート撮影📷":
     )
     
     if img_file is not None:
-        # アップロードされた画像をバイト列としてセッション状態に保持
         st.session_state.current_image_bytes = img_file.getvalue()
         
         preview_img = Image.open(io.BytesIO(st.session_state.current_image_bytes))
         preview_img = ImageOps.exif_transpose(preview_img)
         
-        st.image(preview_img, caption="選択されたレシート", use_container_width=True)
+        st.image(preview_img, caption="選択されたレシート", use_column_width=True)
         
         # 解析ボタン
         if st.button("🤖 Geminiでレシートを解析する", use_container_width=True):
@@ -183,23 +193,29 @@ if page == "レシート撮影📷":
         with col_save:
             if st.button("選択した項目を台帳に登録する💾", use_container_width=True):
                 with st.spinner("ストレージへの保存と台帳登録を実行中...⏳"):
-                    # 1. 画像メタデータをFirestoreに初期作成
-                    doc_ref = db.collection("receipt_images").add({
-                        "person": current_user,
-                        "timestamp": firestore.SERVER_TIMESTAMP,
-                        "image_url": ""
-                    })
-                    doc_id = doc_ref[1].id
+                    image_url = ""
+                    doc_id = ""
                     
-                    # 2. Firebase Storageへ画像をアプロードしてURLを保持
-                    if st.session_state.current_image_bytes:
+                    # 1. Firestoreにレシート画像のドキュメントを作成
+                    try:
+                        doc_ref = db.collection("receipt_images").add({
+                            "person": current_user,
+                            "timestamp": firestore.SERVER_TIMESTAMP,
+                            "image_url": ""
+                        })
+                        doc_id = doc_ref[1].id
+                    except Exception as e:
+                        st.error(f"Firestoreへのデータ作成エラー: {e}")
+
+                    # 2. Firebase Storageへの画像アップロード
+                    if doc_id and st.session_state.current_image_bytes:
                         try:
                             image_url = upload_image(st.session_state.current_image_bytes, doc_id)
-                            doc_ref[1].update({"image_url": image_url})
+                            db.collection("receipt_images").document(doc_id).update({"image_url": image_url})
                         except Exception as e:
-                            st.error(f"画像のストレージ保存に失敗しました: {e}")
+                            st.error(f"🚨 画像のストレージ保存エラー: {e}")
 
-                    # 3. 選択された明細項目をFirestore（expenses）に一括追加
+                    # 3. 台帳（expenses）へ品目を一括登録
                     registered_count = 0
                     for _, row in edited_df.iterrows():
                         if row["登録"] and row["金額"] > 0:
@@ -214,9 +230,9 @@ if page == "レシート撮影📷":
                             })
                             registered_count += 1
                     
-                    st.success(f"ストレージへの画像保存と{registered_count}件の台帳登録が完了しました！")
+                    st.success(f"台帳に{registered_count}件登録しました！")
                     
-                    # セッション状態をクリア
+                    # リセット処理
                     st.session_state.gemini_items = None
                     st.session_state.current_image_bytes = None
                     st.session_state.uploader_key += 1
@@ -275,8 +291,9 @@ if page == "レシート撮影📷":
                 for _, r in df_daichi.iterrows():
                     label = f"🐔 {r['日時']}"
                     with st.expander(label):
-                        if r["image_url"]:
-                            st.image(r["image_url"], use_container_width=True)
+                        url = r.get("image_url")
+                        if url:
+                            st.image(url, caption=f"撮影日: {r['日時']}", use_column_width=True)
                             if st.button("🐛削除", key=f"del_{r['id']}"):
                                 with st.spinner("削除中...⏳"):
                                     delete_image(r["id"])
@@ -295,8 +312,9 @@ if page == "レシート撮影📷":
                 for _, r in df_hinako.iterrows():
                     label = f"🐥 {r['日時']}"
                     with st.expander(label):
-                        if r["image_url"]:
-                            st.image(r["image_url"], use_container_width=True)
+                        url = r.get("image_url")
+                        if url:
+                            st.image(url, caption=f"撮影日: {r['日時']}", use_column_width=True)
                             if st.button("🐼削除", key=f"del_{r['id']}"):
                                 with st.spinner("削除中...⏳"):
                                     delete_image(r["id"])
