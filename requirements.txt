@@ -5,3 +5,4 @@ google-auth
 google-generativeai
 pandas
 pillow
+firebase-admin
