@@ -610,7 +610,134 @@ elif page == "管理者設定🍖":
 
 # --- 家計簿入力 (台帳入力) ---
 else:
-    st.markdown("## 🐘 2人だけの台帳")
+    # ----------------------------------------------------
+    # 📸 最上位：レシート撮影・Gemini解析・取捨選択・画像保存機能
+    # ----------------------------------------------------
+    with st.expander("📸 レシート撮影・AI自動解析", expanded=True):
+        if "uploader_key" not in st.session_state:
+            st.session_state.uploader_key = 0
+        if "gemini_items" not in st.session_state:
+            st.session_state.gemini_items = None
+        if "gemini_place" not in st.session_state:
+            st.session_state.gemini_place = ""
+
+        img_file = st.file_uploader(
+            "ここをタップしてレシートを撮影 📸", 
+            type=["jpg", "jpeg", "png"],
+            label_visibility="collapsed",
+            key=f"receipt_uploader_{st.session_state.uploader_key}"
+        )
+        
+        if img_file is not None:
+            preview_img = Image.open(img_file)
+            preview_img = ImageOps.exif_transpose(preview_img)
+            
+            st.image(preview_img, caption="選択されたレシート", use_container_width=True)
+            
+            # 解析ボタン
+            if st.button("🤖 Geminiでレシートを解析する", use_container_width=True):
+                with st.spinner("レシートの情報をAIが読み取っています...⏳"):
+                    try:
+                        model = genai.GenerativeModel('gemini-3.5-flash')
+                        prompt = """
+                        このレシート画像から以下の情報を抽出し、必ず純粋なJSON形式のみで返してください（マークダウンの ```json と ``` は含めないでください）。
+                        {
+                          "place": "店名（不明な場合は空文字）",
+                          "items": [
+                            {
+                              "item": "商品名",
+                              "amount": 金額（整数）
+                            }
+                          ]
+                        }
+                        """
+                        response = model.generate_content([prompt, preview_img])
+                        cleaned_text = response.text.strip().replace("```json", "").replace("```", "").strip()
+                        parsed_data = json.loads(cleaned_text)
+                        
+                        st.session_state.gemini_place = parsed_data.get("place", "")
+                        
+                        extracted_list = []
+                        for row in parsed_data.get("items", []):
+                            extracted_list.append({
+                                "登録": True,
+                                "場所": st.session_state.gemini_place,
+                                "品目": row.get("item", ""),
+                                "金額": int(row.get("amount", 0)),
+                                "全立替": False
+                            })
+                        st.session_state.gemini_items = pd.DataFrame(extracted_list)
+                        st.success("解析が完了しました！下のフォームで内容を確認・編集して登録してください。")
+                    except Exception as e:
+                        st.error(f"解析に失敗しました: {e}")
+
+        # 解析結果の編集・取捨選択UI
+        if st.session_state.gemini_items is not None and not st.session_state.gemini_items.empty:
+            st.subheader("🛒 解析された項目の確認・取捨選択")
+            st.write("不要な項目のチェックを外すか、内容を直接編集してから登録ボタンを押してください。")
+            
+            edited_df = st.data_editor(
+                st.session_state.gemini_items,
+                column_config={
+                    "登録": st.column_config.CheckboxColumn("登録", default=True),
+                    "場所": st.column_config.TextColumn("場所（店名）"),
+                    "品目": st.column_config.TextColumn("品名"),
+                    "金額": st.column_config.NumberColumn("金額 (円)", format="%d円"),
+                    "全立替": st.column_config.CheckboxColumn("全立替", default=False)
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+            
+            col_save, col_clear = st.columns(2)
+            with col_save:
+                if st.button("選択した項目を台帳に登録する💾", use_container_width=True):
+                    with st.spinner("データを保存中...⏳"):
+                        # レシート画像を Firebase Storage に保存しログを記録
+                        doc_ref = db.collection("receipt_images").add({
+                            "person": current_user,
+                            "timestamp": firestore.SERVER_TIMESTAMP,
+                            "image_url": ""
+                        })
+                        doc_id = doc_ref[1].id
+                        
+                        try:
+                            img_file.seek(0)
+                            image_url = upload_image(img_file, doc_id)
+                            doc_ref[1].update({"image_url": image_url})
+                        except Exception:
+                            pass
+
+                        # チェックされた各アイテムを expenses に登録
+                        registered_count = 0
+                        for _, row in edited_df.iterrows():
+                            if row["登録"] and row["金額"] > 0:
+                                db.collection("expenses").add({
+                                    "person": current_user,
+                                    "place": row["場所"] if row["場所"] else "不明",
+                                    "item": row["品目"] if row["品目"] else "不明",
+                                    "amount": int(row["金額"]),
+                                    "is_reimburse": bool(row["全立替"]),
+                                    "timestamp": firestore.SERVER_TIMESTAMP,
+                                    "is_archived": False
+                                })
+                                registered_count += 1
+                        
+                        st.success(f"{registered_count}件の項目を台帳に登録しました！")
+                        st.session_state.gemini_items = None
+                        st.session_state.uploader_key += 1
+                        st.cache_data.clear()
+                        st.rerun()
+                        
+            with col_clear:
+                if st.button("解析をやり直す（破棄）", use_container_width=True):
+                    st.session_state.gemini_items = None
+                    st.session_state.uploader_key += 1
+                    st.rerun()
+
+    # ----------------------------------------------------
+    # 手入力による記録・精算結果・履歴一覧
+    # ----------------------------------------------------
     cats = get_data("categories")
     df_cats = pd.DataFrame(cats) if cats else pd.DataFrame(columns=["place", "item"])
      
